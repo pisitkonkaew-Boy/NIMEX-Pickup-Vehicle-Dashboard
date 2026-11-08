@@ -45,6 +45,16 @@ function rowsFromAoA(A){
   return out;
 }
 async function parseFile(file){
+  if(/\.json$/i.test(file.name)){
+    var J = JSON.parse(await file.text()), cols = J.cols || COLS, out = [];
+    (J.rows || []).forEach(function(a){
+      var o = {}; cols.forEach(function(k, i){ o[k] = a[i] === undefined || a[i] === null ? '' : String(a[i]); });
+      var dc = (String(o.g || '').trim().match(/^(\d+)/) || [])[1];
+      if(o.b && ALLOWED_DC.indexOf(dc) !== -1){ var rec = {}; COLS.forEach(function(k){ rec[k] = o[k] || ''; }); out.push(rec); }
+    });
+    if(!out.length) throw new Error('ไฟล์ JSON นี้ไม่มีข้อมูลที่ใช้ได้');
+    return out;
+  }
   var wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type:'array' });
   return rowsFromAoA(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:false, defval:'' }));
 }
@@ -145,8 +155,8 @@ async function start(){
   }
   if(!D.rows.length){
     if(window.__PICKUP_ADMIN){
-      bootMsg('<img src="logo.png" alt="NIM Express" class="boot-logo"><h1>ตั้งค่าครั้งแรก</h1><p>เลือกไฟล์รายงาน NIMEX016267 (.xlsx) เลือกได้หลายเดือนพร้อมกัน ระบบจะแสดงสรุปให้ตรวจก่อนบันทึก</p>' +
-        '<input type="file" id="seed-f" accept=".xlsx,.xls" multiple aria-label="ไฟล์รายงาน"><p class="msg" id="seed-m"></p>');
+      bootMsg('<img src="logo.png" alt="NIM Express" class="boot-logo"><h1>ตั้งค่าครั้งแรก</h1><p>เลือกไฟล์ seed.json หรือไฟล์รายงาน NIMEX016267 (.xlsx) เลือกได้หลายไฟล์พร้อมกัน ระบบจะแสดงสรุปให้ตรวจก่อนบันทึก</p>' +
+        '<input type="file" id="seed-f" accept=".xlsx,.xls,.json" multiple aria-label="ไฟล์รายงานหรือ seed.json"><p class="msg" id="seed-m"></p>');
       document.getElementById('seed-f').onchange = function(e){ document.getElementById('seed-m').textContent = 'กำลังอ่านไฟล์…'; pickAndPlan(Array.from(e.target.files), true); };
     } else bootMsg('<img src="logo.png" alt="NIM Express" class="boot-logo"><h1>ยังไม่มีข้อมูล</h1><p>ผู้ดูแลยังไม่ได้นำเข้าข้อมูล</p>');
     return;
