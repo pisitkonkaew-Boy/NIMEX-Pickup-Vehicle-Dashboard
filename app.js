@@ -52,7 +52,7 @@
     var cv=$('cover');
     if(cv){
       var close=function(){cv.remove()};
-      if(location.hash==='#admin'){close()}else{cv.querySelector('button').onclick=close;cv.querySelector('.fg').onclick=close;cv.querySelector('button').focus()}
+      cv.querySelector('button').onclick=close;cv.querySelector('.fg').onclick=close;cv.querySelector('button').focus();
     }
     themeIcon();
     $('themeBtn').addEventListener('click',function(){
