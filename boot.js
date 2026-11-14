@@ -163,7 +163,7 @@ async function start(){
   }
   boot.hidden = true;
   document.getElementById('appRoot').hidden = false;
-  try{ await loadScript('app.js?v=' + (window.PICKUP_V || 1)); }
+  try{ await loadScript('share.js?v=' + (window.PICKUP_V || 1)); await loadScript('app.js?v=' + (window.PICKUP_V || 1)); }
   catch(e){ bootMsg('<h1>โหลดหน้าเว็บไม่สำเร็จ</h1><p>ลองเปิดหน้านี้ใหม่อีกครั้ง</p>'); }
 }
 window.addEventListener('hashchange', function(){ if(location.hash === '#admin' && !window.__PICKUP_ADMIN) location.reload(); });

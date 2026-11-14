@@ -408,6 +408,8 @@ td.txt{text-align:left!important;white-space:nowrap}
 /* share sheet */
 .checks{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
 .checks label{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:7px 10px;min-height:40px;font-size:14px;cursor:pointer}
+.checks .checks-h{grid-column:1/-1;margin:8px 0 0;font-size:13px;font-weight:600;color:var(--muted)}
+.checks label.wide{grid-column:1/-1}
 .xbtns{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr))}
 .xbtn.gold{background:linear-gradient(180deg,#f0d57a,#d4af37);color:#0a2a5e}
 .xbtn[disabled]{opacity:.55}
