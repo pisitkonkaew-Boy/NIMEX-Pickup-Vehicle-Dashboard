@@ -3,6 +3,7 @@
    ไม่มีการคำนวณ KPI ใหม่ในไฟล์นี้: ตัวเลขทั้งหมดมาจากฟังก์ชันเดิมใน app.js ที่ส่งเข้ามาทาง A
    ภาพสร้างจาก SVG ล้วน ฝังฟอนต์ Prompt + โลโก้ (ไม่ใช้ html2canvas) */
 window.PickupShare = function(A){
+window.__pickupA = A;   /* NIMEX Hub ศูนย์รายงาน อ่านตัวเลข Ontime ผ่าน computeKPISet เดิม */
 var state = A.state, anState = A.anState, analysisRows = A.analysisRows, applyFilters = A.applyFilters, buildDcTableModel = A.buildDcTableModel, chartWindowTrips = A.chartWindowTrips, computeKPISet = A.computeKPISet, dataMinKey = A.dataMinKey, diffPct = A.diffPct, effectiveGranularity = A.effectiveGranularity, fmtBaht = A.fmtBaht, fmtDelta = A.fmtDelta, fmtInt = A.fmtInt, fmtPct = A.fmtPct, getProblemTrips = A.getProblemTrips, groupByBucket = A.groupByBucket, locationOf = A.locationOf, prevTripsForPeriod = A.prevTripsForPeriod, previousPeriod = A.previousPeriod, shortRangeLabel = A.shortRangeLabel, showToast = A.showToast, avgDelayMin = A.avgDelayMin, tripsInRange = A.tripsInRange, tripMatchesNonDateFilters = A.tripMatchesNonDateFilters, dcShortLabel = A.dcShortLabel, dcRowsFor = A.dcRowsFor;
 // ===================== [ปรับ 08/11/2569] แชร์และส่งออก ตาม NIMEX Design Kit =====================
 // ทุกไฟล์ใช้ผลตามตัวกรองปัจจุบัน · ภาพสร้างจาก SVG ล้วนที่ฝังฟอนต์ Prompt (ไม่ใช้ html2canvas) · ชื่อไฟล์ภาษาอังกฤษ
