@@ -2927,7 +2927,7 @@ function renderPlanSettings(){
   tb.innerHTML = rows.map(function(o){ var p = o.p; return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td><button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
   var ob = document.getElementById('planOutBody');
   document.getElementById('planOutCount').textContent = 'ลูกค้าสินค้าแห้งที่ไม่อยู่ในแผน ' + fmtInt(out.length) + ' ราย · ตอนนี้ไม่นำมาคำนวณในแผนใหม่ · กด "เพิ่มเข้าแผน" เพื่อระบุกลุ่ม';
-  ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + escapeHtml(o.code) + '</td><td>' + escapeHtml(o.name) + '</td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td><button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
+  ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + escapeHtml(o.code) + '</td><td><button class="link-btn" type="button" data-plan-take="' + i + '" title="กดเพื่อเพิ่มเข้าแผน แล้วเลือกกลุ่ม/เวลา">' + escapeHtml(o.name || o.code) + '</button></td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td><button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
   planUi.out = out;
 }
 function escapeHtml(x){ return String(x === null || x === undefined ? '' : x).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
@@ -2976,7 +2976,10 @@ function wirePlan(){
       var o = planUi.out && planUi.out[+t.dataset.planTake], F = el('planAddForm'); if(!o || !F) return;
       var dcSel = F.elements.dc, opt = Array.from(dcSel.options).find(function(x){ return dcCode(x.value) === o.dcCode; });
       if(opt) dcSel.value = opt.value; F.elements.code.value = o.code; F.elements.name.value = o.name;
+      if(o.zone !== undefined) F.elements.zone.value = o.zone;
       F.scrollIntoView({ behavior:'smooth', block:'center' }); F.elements.group.focus();
+      F.classList.remove('flash'); void F.offsetWidth; F.classList.add('flash');
+      showToast('ใส่ ' + o.code + ' ' + o.name + ' ในฟอร์มแล้ว · เลือกกลุ่ม/เวลา แล้วกด "+ เพิ่มเข้าแผน"');
     }
   });
   if(state.planMode === 'new' && !PLAN.rows.length) state.planMode = 'old';

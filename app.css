@@ -446,3 +446,7 @@ body[data-tab="tabSettings"] .page-h .ph-r{display:none}
 .btn-ghost.sm{padding:3px 10px;font-size:12px}
 td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
 @media (min-width:900px){.set-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.link-btn{border:0;background:none;padding:0;font:inherit;color:var(--navy2);text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
+.link-btn:hover{color:var(--gold-d,#b8860b)}
+.plan-form.flash{animation:planflash 1.6s ease}
+@keyframes planflash{0%,40%{box-shadow:0 0 0 3px var(--gold-l);border-radius:10px}100%{box-shadow:none}}
