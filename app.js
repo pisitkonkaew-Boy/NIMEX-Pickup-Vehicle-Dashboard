@@ -2865,7 +2865,7 @@ function planAgg(trips){
 }
 // ===================== [ปรับ 16/11/2569] แผนใหม่: นับตามลูกค้า (แบบ ก) =====================
 // ลูกค้าแต่ละราย (1 ราย ใน 1 เที่ยว) วัดกับเวลาตัดของกลุ่มตัวเอง: ทัน = เวลาตัด DC (หน้าตั้งค่า) · ตก = 20:00
-// เที่ยวช่องรวม = Ontime เมื่อลูกค้าทุกรายในเที่ยวทันเวลา (เท่ากับสถานะเที่ยวเดิม) · เที่ยวของกลุ่ม = เที่ยวที่มีลูกค้ากลุ่มนั้น
+// เที่ยว: ยึดเวลารถ · เข้ารับอย่างเดียว = กลุ่มทัน (Cut off DC), ในสายกระจาย = กลุ่มตก (20:00) · ลูกค้า/บิล/กล่อง: ตามกลุ่มของลูกค้า
 // บิล/กล่อง นับตามสถานะของลูกค้าเจ้าของบิล · เที่ยวที่ไม่มีเวลากลับ (ประมาณการ) = Delay · ยังไม่กลับ = รถที่ยังไม่มีเวลากลับของวันนี้
 function planPickStatus(t, cut){
   if(t.customers && state.excludedCustomers && state.excludedCustomers.size && t.customers.some(function(c){ return state.excludedCustomers.has(c); })) return 'on';
@@ -2876,13 +2876,15 @@ function planPickStatus(t, cut){
 }
 function planStats(trips){
   var Z = function(){ return { t:{ n:0, on:0, de:0, pe:0 }, c:{ n:0, on:0, de:0, pe:0 }, b:{ n:0, on:0, de:0, pe:0 }, i:{ n:0, on:0, de:0, pe:0 }, cuSet:new Set(), cu:0 }; };
-  var R = { all:Z(), t:Z(), l:Z() }, keys = new Set(trips.map(function(t){ return t.key; })), byTrip = new Map();
+  var R = { all:Z(), t:Z(), l:Z() }, keys = new Set(trips.map(function(t){ return t.key; })), byTrip = new Map(), tripType = new Map();
   state.lineItems.forEach(function(li){
     if(!li.plan) return; var t = state.lineItemTripMap.get(li.idx); if(!t || !keys.has(t.key)) return;
     var p = li.plan, ck = p.dcCode + '|' + (p.code && p.code !== '-' ? p.code : 'N:' + planNormName(p.name));
     if(!byTrip.has(t.key)) byTrip.set(t.key, new Map());
     var m = byTrip.get(t.key); if(!m.has(ck)) m.set(ck, { g: p.group === 'ทัน' ? 't' : 'l', b:0, i:0 });
     var o = m.get(ck); o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems;
+    // ประเภทเที่ยวจากเลขที่ใบรายการ (หลักที่ 4): 5 = เข้ารับอย่างเดียว → กลุ่มทัน, 3 = กระจาย+เข้ารับ (ในสาย) → กลุ่มตก
+    var ty = String(li.e || '').charAt(3); if(ty === '5' || ty === '3'){ if(!tripType.has(t.key)) tripType.set(t.key, {}); tripType.get(t.key)[ty] = 1; }
   });
   trips.forEach(function(t){
     var m = byTrip.get(t.key); if(!m) return;
@@ -2891,9 +2893,10 @@ function planStats(trips){
       var st = planPickStatus(t, o.g === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF); res[o.g] = st;
       ['all', o.g].forEach(function(g){ var X = R[g]; X.c.n++; X.c[st]++; X.b.n += o.b; X.b[st] += o.b; X.i.n += o.i; X.i[st] += o.i; X.cuSet.add(ck); });
     });
-    Object.keys(res).forEach(function(g){ R[g].t.n++; R[g].t[res[g]]++; });
-    var v = Object.keys(res).map(function(g){ return res[g]; }), a = v.indexOf('pe') !== -1 ? 'pe' : v.indexOf('de') !== -1 ? 'de' : 'on';
-    R.all.t.n++; R.all.t[a]++;
+    // เที่ยว: ยึดเวลารถ · 1 เที่ยวอยู่กลุ่มเดียวตามประเภทเที่ยว (ไม่มีเลขใบรายการ → มีลูกค้ากลุ่มทัน = ทัน ไม่งั้น ตก)
+    var tt = tripType.get(t.key) || {}, tg = tt['3'] ? 'l' : tt['5'] ? 't' : (res.t ? 't' : 'l');
+    var a = planPickStatus(t, tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF);
+    R[tg].t.n++; R[tg].t[a]++; R.all.t.n++; R.all.t[a]++;
   });
   ['all','t','l'].forEach(function(g){ R[g].cu = R[g].cuSet.size; });
   return R;
@@ -2961,7 +2964,7 @@ function planViewHtml(trips){
   var head = '<table class="pv-t pv-gh">' + cols + '<tr><td><div class="pv-ghb" style="background:#0a2a5e;color:#fff;text-align:left;padding-left:16px">แผนใหม่<div>เทียบ 3 มุมมอง</div></div></td>' +
     PV_G.map(function(g){ return '<td colspan="3"><div class="pv-ghb" style="background:' + PV_GC[g] + ';color:' + PV_GT[g] + '">' + PV_GN[g] + '<div>' + PV_GS[g] + '</div></div></td>'; }).join('') + '</tr></table>';
   return '<div class="pv-kcs">' + kc('all') + kc('t') + kc('l') + '</div>' + head +
-    box('🚚', 'เที่ยว', '1 เที่ยวมีได้ทั้ง 2 กลุ่ม · ช่องรวม Ontime เมื่อลูกค้าทุกรายในเที่ยวทันเวลา', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
+    box('🚚', 'เที่ยว', 'ยึดเวลารถถึงคลัง · เที่ยวเข้ารับอย่างเดียว = กลุ่มทัน (เทียบ Cut off DC) · เที่ยวในสายกระจาย = กลุ่มตก (เทียบ 20:00) · 1 เที่ยวนับกลุ่มเดียว', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
     box('👥', 'ลูกค้า', 'Ontime / Delay / ยังไม่กลับ นับครั้งที่เข้ารับลูกค้า (ลูกค้า 1 ราย ใน 1 เที่ยว = 1 ครั้ง) · วัดกับเวลาตัดของกลุ่มลูกค้า', rTotal('ลูกค้า (ราย)', 'cu') + rates('c')) +
     box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
     box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
