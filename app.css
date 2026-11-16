@@ -450,3 +450,43 @@ td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
 .link-btn:hover{color:var(--gold-d,#b8860b)}
 .plan-form.flash{animation:planflash 1.6s ease}
 @keyframes planflash{0%,40%{box-shadow:0 0 0 3px var(--gold-l);border-radius:10px}100%{box-shadow:none}}
+/* [ปรับ 16/11/2569] แผนใหม่: มุมมองเทียบ 3 กลุ่ม × 4 ด้าน (ธีม NIMEX) */
+body:not(.is-admin) .pv-admin{display:none!important}
+body.plan-new .kpi-row.k3{display:none}
+body.plan-new .kpi-row2 .kpi-card:has(#kpiBills),body.plan-new .kpi-row2 .kpi-card:has(#kpiPieces){display:none}
+.plan-view{margin:0 0 16px;font-variant-numeric:tabular-nums}
+.pv-kcs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.pv-kc{position:relative;background:linear-gradient(135deg,#0a2a5e,#123f8c);border-radius:16px;padding:16px 20px 20px;color:#fff;overflow:hidden}
+.pv-kg{position:absolute;top:14px;right:16px;border-radius:999px;padding:3px 14px;font-size:13px;font-weight:700}
+.pv-kl{color:#f0d57a;font-size:13px;font-weight:600}
+.pv-kv{font-family:var(--font-h);font-size:clamp(34px,3.4vw,46px);font-weight:700;line-height:1.1;letter-spacing:-.5px}
+.pv-kd{font-size:14px;margin-top:2px}.pv-kd span{color:#b9c9e6;font-size:12px}
+.pv-ks{color:#b9c9e6;font-size:12.5px;margin-top:2px}
+.pv-kc>i{position:absolute;left:0;right:0;bottom:0;height:6px}
+.pv-kdc{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+.pv-kdc td{white-space:nowrap;padding:5px 0;border-top:1px solid rgba(255,255,255,.16);color:#dfe8f7}
+.pv-kdc .r1{text-align:right;font-weight:700;color:#fff;font-size:15px}.pv-kdc .r2{text-align:right;padding-left:8px}.pv-kdc .r3{text-align:right;color:#b9c9e6;font-size:11.5px;padding-left:8px}
+.pv-rk{display:inline-block;width:18px;height:18px;border-radius:50%;background:#d4af37;color:#0a2a5e;font-size:11px;font-weight:700;text-align:center;line-height:18px;margin-right:7px}
+.pv-kone{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.16);color:#f0d57a;font-weight:600;font-size:13px}
+.pv-t{width:100%;border-collapse:collapse;table-layout:fixed}
+.pv-t col.c0{width:16%}.pv-t col.cn{width:9.4%}.pv-t col.cp{width:8.2%}.pv-t col.cd{width:10.4%}
+.pv-gh td{padding:0 5px 10px}
+.pv-ghb{border-radius:12px;text-align:center;font-family:var(--font-h);font-weight:700;font-size:16px;padding:8px 6px 6px;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.pv-ghb div{font-weight:500;font-size:11.5px;opacity:.85}
+.pv-box{background:var(--panel);border:1px solid var(--line2);border-radius:14px;margin-top:12px;overflow:hidden;box-shadow:inset 0 3px 0 #d4af37}
+.pv-bh{display:flex;align-items:center;gap:10px;padding:11px 16px 9px}.pv-bh b{font-family:var(--font-h);font-size:16px;font-weight:700;color:var(--ink)}
+.pv-desc{font-size:11.5px;color:var(--muted);margin-left:auto;text-align:right}
+.pv-ic{width:28px;height:28px;border-radius:8px;background:#0a2a5e;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+.pv-t td{padding:8px 10px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink)}
+.pv-sh td{background:#0a2a5e;color:#fff!important;font-size:11.5px!important;font-weight:600;padding:6px 10px;border-top:0}
+.pv-t .lb{font-weight:600;padding-left:16px}
+.pv-t .n{text-align:right;font-family:var(--font-h);font-weight:600;font-size:15px}
+.pv-t .p{text-align:right;color:var(--muted)}
+.pv-t .d{text-align:right;font-size:12.5px;padding-right:16px}
+.pv-t:not(.pv-gh) tr>td:nth-child(4),.pv-t:not(.pv-gh) tr>td:nth-child(7){border-right:1px solid var(--line)}
+.pv-hl td{background:rgba(29,87,184,.07)}.pv-hl .n{font-size:16.5px;font-weight:700}.pv-hl .p{color:var(--ink);font-weight:700;font-size:14.5px}
+.pv-tt td{background:rgba(10,42,94,.025)}
+.pv-g{color:#1d57b8;font-weight:600}.pv-b{color:#c0392b;font-weight:600}.pv-gl{color:#9ec5ff;font-weight:600}.pv-bl{color:#ff9b9b;font-weight:600}
+.pv-z{color:var(--muted)}.pv-z2{color:#b9c9e6;font-size:12px}.pv-black{color:var(--ink);font-weight:600}
+.pv-foot{font-size:11.5px;color:var(--muted);margin:10px 2px 0}
+@media (max-width:900px){.pv-kcs{grid-template-columns:1fr}.plan-view{overflow-x:auto}.pv-t,.pv-gh{min-width:860px}}

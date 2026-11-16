@@ -4,7 +4,7 @@
    ภาพสร้างจาก SVG ล้วน ฝังฟอนต์ Prompt + โลโก้ (ไม่ใช้ html2canvas) */
 window.PickupShare = function(A){
 window.__pickupA = A;   /* NIMEX Hub ศูนย์รายงาน อ่านตัวเลข Ontime ผ่าน computeKPISet เดิม */
-var state = A.state, anState = A.anState, analysisRows = A.analysisRows, applyFilters = A.applyFilters, buildDcTableModel = A.buildDcTableModel, chartWindowTrips = A.chartWindowTrips, computeKPISet = A.computeKPISet, dataMinKey = A.dataMinKey, diffPct = A.diffPct, effectiveGranularity = A.effectiveGranularity, fmtBaht = A.fmtBaht, fmtDelta = A.fmtDelta, fmtInt = A.fmtInt, fmtPct = A.fmtPct, getProblemTrips = A.getProblemTrips, groupByBucket = A.groupByBucket, locationOf = A.locationOf, prevTripsForPeriod = A.prevTripsForPeriod, previousPeriod = A.previousPeriod, shortRangeLabel = A.shortRangeLabel, showToast = A.showToast, avgDelayMin = A.avgDelayMin, tripsInRange = A.tripsInRange, tripMatchesNonDateFilters = A.tripMatchesNonDateFilters, dcShortLabel = A.dcShortLabel, dcRowsFor = A.dcRowsFor;
+var state = A.state, anState = A.anState, analysisRows = A.analysisRows, applyFilters = A.applyFilters, buildDcTableModel = A.buildDcTableModel, chartWindowTrips = A.chartWindowTrips, computeKPISet = A.computeKPISet, dataMinKey = A.dataMinKey, diffPct = A.diffPct, effectiveGranularity = A.effectiveGranularity, fmtBaht = A.fmtBaht, fmtDelta = A.fmtDelta, fmtInt = A.fmtInt, fmtPct = A.fmtPct, getProblemTrips = A.getProblemTrips, groupByBucket = A.groupByBucket, locationOf = A.locationOf, prevTripsForPeriod = A.prevTripsForPeriod, previousPeriod = A.previousPeriod, shortRangeLabel = A.shortRangeLabel, showToast = A.showToast, avgDelayMin = A.avgDelayMin, tripsInRange = A.tripsInRange, tripMatchesNonDateFilters = A.tripMatchesNonDateFilters, dcShortLabel = A.dcShortLabel, dcRowsFor = A.dcRowsFor, planStats = A.planStats, planDcRank = A.planDcRank;
 // ===================== [ปรับ 08/11/2569] แชร์และส่งออก ตาม NIMEX Design Kit =====================
 // ทุกไฟล์ใช้ผลตามตัวกรองปัจจุบัน · ภาพสร้างจาก SVG ล้วนที่ฝังฟอนต์ Prompt (ไม่ใช้ html2canvas) · ชื่อไฟล์ภาษาอังกฤษ
 var SECS = [['kpi','ผลสำคัญ'],['trend','แนวโน้ม Ontime %'],['delay','เวลาล่าช้าเฉลี่ย'],['dc','สรุปราย DC'],['cust','ลูกค้าที่ได้รับผลกระทบ'],['analysis','ผลการวิเคราะห์']];
@@ -367,7 +367,101 @@ function info169Data(){
   var plates = bwData('bw_ontimePct')[1];
   return { K:K, cards:cards, dcs:dcStats(), trend:trendData('trend'), plates:plates, grade:showGrade() };
 }
+// ===================== [ปรับ 16/11/2569] แผนใหม่: อินโฟกราฟิก 16:9 · Excel · ข้อความ (ไม่มีคำอธิบายในไฟล์ส่งออก) =====================
+var PG = ['all','t','l'], PGN = { all:'รวม', t:'กลุ่มทัน', l:'กลุ่มตก' }, PGC = { all:'#d4af37', t:'#1d57b8', l:'#1a1a1a' }, PGT = { all:'#0a2a5e', t:'#ffffff', l:'#ffffff' };
+var PBOX = [['t','เที่ยว','line','เที่ยวทั้งหมด'], ['c','ลูกค้า','user','ลูกค้า (ราย)'], ['b','บิล','bill','บิลทั้งหมด'], ['i','กล่อง','box','กล่องทั้งหมด']];
+function pp(a, b){ return b ? a / b * 100 : 0; }
+// คืนค่าแถวของแต่ละกรอบ: [ป้าย, {all,t,l: {n, p, d(ผลต่าง), unit, good}}]
+function planModel(){
+  var trips = applyFilters(), pi = prevTripsForPeriod(), C = planStats(trips), P = pi ? planStats(pi.trips) : null;
+  var boxes = PBOX.map(function(bx){
+    var m = bx[0], rows = [], tot = {};
+    PG.forEach(function(g){
+      var n = m === 'c' ? C[g].cu : C[g][m].n, an = m === 'c' ? C.all.cu : C.all[m].n, pn = P ? (m === 'c' ? P[g].cu : P[g][m].n) : null;
+      tot[g] = { n:n, p: g === 'all' ? 100 : pp(n, an), d: P && pn ? (n - pn) / pn * 100 : null, unit:'%', good:true };
+    });
+    rows.push([bx[3], tot, 'tt']);
+    [['on','Ontime',true,'hl'], ['de','Delay',false,''], ['pe','ยังไม่กลับ',false,'']].forEach(function(r){
+      var o = {};
+      PG.forEach(function(g){ var v = pp(C[g][m][r[0]], C[g][m].n), pv = P && P[g][m].n ? pp(P[g][m][r[0]], P[g][m].n) : null; o[g] = { n:C[g][m][r[0]], p:v, d: pv === null ? null : v - pv, unit:' จุด', good:r[2] }; });
+      rows.push([r[1], o, r[3]]);
+    });
+    return { key:m, title:bx[1], icon:bx[2], rows:rows };
+  });
+  var cards = PG.map(function(g){
+    var c = C[g].t, v = pp(c.on, c.n), pv = P && P[g].t.n ? pp(P[g].t.on, P[g].t.n) : null;
+    return { g:g, v:v, n:c.n, on:c.on, d: pv === null ? null : v - pv, dcs: state.selectedDC ? [] : planDcRank(trips, pi ? pi.trips : null, g) };
+  });
+  var dcSel = state.selectedDC ? (state.dcList.find(function(d){ return d.code === state.selectedDC; }) || { label:state.selectedDC }).label : '';
+  return { boxes:boxes, cards:cards, dcSel:dcSel, hasPrev:!!P };
+}
+function pdTxt(d, unit){ if(d === null || d === undefined || !isFinite(d)) return '–'; if(Math.abs(d) < 0.005) return 'เท่าเดิม'; return (d > 0 ? '▲' : '▼') + Math.abs(d).toFixed(2) + unit; }
+function pdCol(d, good, light){ if(d === null || d === undefined || !isFinite(d) || Math.abs(d) < 0.005) return light ? '#b9c9e6' : '#55657f'; var ok = (d > 0) === good; return light ? (ok ? '#9ec5ff' : '#ff9b9b') : (ok ? '#1d57b8' : '#c0392b'); }
+function info169Plan(){
+  var W = 1920, H = 1080, M = planModel(), b = '', m = 30, head = 116;
+  b += '<defs><linearGradient id="pvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a2a5e"/><stop offset="1" stop-color="#123f8c"/></linearGradient></defs>';
+  // การ์ด KPI 3 ใบ: Ontime % (เที่ยว) + DC เรียงจากดีที่สุด
+  var ky = head + 18, kh = 214, kw = (W - 2 * m - 32) / 3;
+  M.cards.forEach(function(c, i){
+    var x = m + i * (kw + 16);
+    b += '<g transform="translate(' + x + ' ' + ky + ')"><rect width="' + kw + '" height="' + kh + '" rx="16" fill="url(#pvg)"/><rect y="' + (kh - 6) + '" width="' + kw + '" height="6" fill="' + (c.g === 'l' ? '#000' : PGC[c.g]) + '"/>' +
+      '<rect x="' + (kw - 112) + '" y="12" width="96" height="28" rx="14" fill="' + PGC[c.g] + '"/><text x="' + (kw - 64) + '" y="31" text-anchor="middle" font-size="15" font-weight="700" fill="' + PGT[c.g] + '">' + PGN[c.g] + '</text>' +
+      '<text x="20" y="32" font-size="15" font-weight="600" fill="#f0d57a">Ontime % (เที่ยว)</text>' +
+      '<text x="20" y="80" font-size="44" font-weight="700" fill="#fff">' + (c.n ? c.v.toFixed(2) + '%' : '–') + '</text>' +
+      '<text x="20" y="106" font-size="15"><tspan font-weight="700" fill="' + pdCol(c.d, true, true) + '">' + esc(pdTxt(c.d, ' จุด')) + '</tspan><tspan fill="#b9c9e6"> · ' + fmtInt(c.on) + '/' + fmtInt(c.n) + ' เที่ยว</tspan></text>';
+    if(M.dcSel) b += '<line x1="20" x2="' + (kw - 20) + '" y1="122" y2="122" stroke="rgba(255,255,255,.18)"/><text x="20" y="150" font-size="16" font-weight="600" fill="#f0d57a">' + esc(M.dcSel) + '</text>';
+    c.dcs.slice(0, 3).forEach(function(r, j){
+      var yy = 122 + j * 29;
+      b += '<line x1="20" x2="' + (kw - 20) + '" y1="' + yy + '" y2="' + yy + '" stroke="rgba(255,255,255,.16)"/><circle cx="30" cy="' + (yy + 15) + '" r="10" fill="#d4af37"/><text x="30" y="' + (yy + 19.5) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#0a2a5e">' + (j + 1) + '</text>' +
+        '<text x="48" y="' + (yy + 20) + '" font-size="15" fill="#dfe8f7">' + esc(r.label) + '</text><text x="' + (kw - 130) + '" y="' + (yy + 20) + '" text-anchor="end" font-size="16" font-weight="700" fill="#fff">' + r.v.toFixed(2) + '%</text>' +
+        '<text x="' + (kw - 20) + '" y="' + (yy + 20) + '" text-anchor="end" font-size="14" font-weight="700" fill="' + pdCol(r.pv === null ? null : r.v - r.pv, true, true) + '">' + esc(pdTxt(r.pv === null ? null : r.v - r.pv, ' จุด')) + '</text>';
+    });
+    b += '</g>';
+  });
+  // 4 กรอบ 2×2
+  var top = ky + kh + 14, bw = (W - 2 * m - 14) / 2, bh = (H - 42 - 12 - top - 14) / 2;
+  var cw = [0.15, 0.102, 0.098, 0.0833], colX = function(bwid){ var xs = [0], acc = cw[0] * bwid; for(var g = 0; g < 3; g++){ xs.push(acc); acc += cw[1] * bwid; xs.push(acc); acc += cw[2] * bwid; xs.push(acc); acc += cw[3] * bwid; } xs.push(acc); return xs; };
+  M.boxes.forEach(function(B, k){
+    var x = m + (k % 2) * (bw + 14), y = top + Math.floor(k / 2) * (bh + 14), xs = colX(bw), rh = (bh - 52 - 36) / 4;
+    var o = '<rect width="' + bw + '" height="' + bh + '" rx="14" fill="#fff" stroke="#c3cfe2"/><path d="M14 0 H' + (bw - 14) + '" stroke="#d4af37" stroke-width="4"/>' +
+      '<rect x="14" y="11" width="32" height="32" rx="9" fill="#0a2a5e"/>' + svgI(B.icon, 18, 15, 24, '#f0d57a') + '<text x="56" y="36" font-size="21" font-weight="700" fill="#0b1f3f">' + B.title + '</text>';
+    var hy = 52;
+    o += '<rect x="4" y="' + hy + '" width="' + (xs[1] - 7) + '" height="32" rx="8" fill="#0a2a5e"/><text x="16" y="' + (hy + 22) + '" font-size="14" font-weight="700" fill="#fff">รายการ</text>';
+    PG.forEach(function(g, gi){ var x0 = xs[1 + gi * 3], x1 = xs[4 + gi * 3]; o += '<rect x="' + (x0 + 2) + '" y="' + hy + '" width="' + (x1 - x0 - 4) + '" height="32" rx="8" fill="' + PGC[g] + '"/><text x="' + ((x0 + x1) / 2) + '" y="' + (hy + 22) + '" text-anchor="middle" font-size="15" font-weight="700" fill="' + PGT[g] + '">' + PGN[g] + '</text>'; });
+    B.rows.forEach(function(R, ri){
+      var yy = hy + 36 + ri * rh, cy = yy + rh / 2 + 6;
+      if(R[2] === 'hl') o += '<rect x="1" y="' + yy + '" width="' + (bw - 2) + '" height="' + rh + '" fill="#eaf1fd"/>';
+      else if(R[2] === 'tt') o += '<rect x="1" y="' + yy + '" width="' + (bw - 2) + '" height="' + rh + '" fill="#fafbfd"/>';
+      o += '<line x1="1" x2="' + (bw - 1) + '" y1="' + yy + '" y2="' + yy + '" stroke="#dbe3f0"/><text x="16" y="' + cy + '" font-size="16" font-weight="600" fill="#0b1f3f">' + esc(R[0]) + '</text>';
+      PG.forEach(function(g, gi){
+        var v = R[1][g], base = 1 + gi * 3, hl = R[2] === 'hl';
+        o += '<text x="' + (xs[base + 1] - 8) + '" y="' + cy + '" text-anchor="end" font-size="' + (hl ? 20 : 18) + '" font-weight="700" fill="#0b1f3f">' + fmtInt(v.n) + '</text>' +
+          '<text x="' + (xs[base + 2] - 8) + '" y="' + cy + '" text-anchor="end" font-size="' + (hl ? 17 : 15) + '" font-weight="' + (hl ? 700 : 400) + '" fill="' + (hl ? '#0b1f3f' : '#55657f') + '">' + v.p.toFixed(2) + '%</text>' +
+          '<text x="' + (xs[base + 3] - 10) + '" y="' + cy + '" text-anchor="end" font-size="14" font-weight="700" fill="' + pdCol(v.d, v.good) + '">' + esc(pdTxt(v.d, '')) + '</text>';
+        if(gi < 2) o += '<line x1="' + xs[base + 3] + '" x2="' + xs[base + 3] + '" y1="' + yy + '" y2="' + (yy + rh) + '" stroke="#dbe3f0"/>';
+      });
+    });
+    b += '<g transform="translate(' + x + ' ' + y + ')">' + o + '</g>';
+  });
+  b += '<rect y="' + (H - 42) + '" width="' + W + '" height="42" fill="#0a2a5e"/><rect y="' + (H - 42) + '" width="' + W + '" height="3" fill="#d4af37"/><text x="' + W / 2 + '" y="' + (H - 15) + '" text-anchor="middle" font-size="14" fill="#dfe8f7">NIM Express · SEAL Gold Chain    ข้อมูลจากรายงาน NIMEX016267</text>';
+  return wrapSvg(W, H, sheetHead(W, head, 'h169p') + b);
+}
+function planSheetRows(){
+  var M = planModel(), out = [['หมวด','รายการ'].concat([].concat.apply([], PG.map(function(g){ return [PGN[g] + ' จำนวน', PGN[g] + ' %', PGN[g] + ' เทียบช่วงก่อน']; })))];
+  M.boxes.forEach(function(B){ B.rows.forEach(function(R){ out.push([B.title, R[0]].concat([].concat.apply([], PG.map(function(g){ var v = R[1][g]; return [v.n, +v.p.toFixed(2), pdTxt(v.d, v.unit)]; })))); }); });
+  out.push([]); out.push(['Ontime % (เที่ยว) ราย DC', 'กลุ่ม', 'อันดับ', 'DC', 'Ontime (เที่ยว)', 'เที่ยวทั้งหมด', 'Ontime %', 'เทียบช่วงก่อน']);
+  M.cards.forEach(function(c){ (M.dcSel ? [{ label:M.dcSel, on:c.on, n:c.n, v:c.v, pv: c.d === null ? null : c.v - c.d }] : c.dcs).forEach(function(r, i){ out.push(['', PGN[c.g], i + 1, r.label, r.on, r.n, +r.v.toFixed(2), pdTxt(r.pv === null ? null : r.v - r.pv, ' จุด')]); }); });
+  return out;
+}
+function planSummaryLines(){
+  var M = planModel(), L = ['', '🎯 แผนใหม่ · Ontime % (เที่ยว)'];
+  M.cards.forEach(function(c){ L.push((c.g === 'all' ? '🟡' : c.g === 't' ? '🔵' : '⚫') + ' ' + PGN[c.g] + ': ' + c.v.toFixed(2) + '% ' + pdTxt(c.d, ' จุด') + ' (' + fmtInt(c.on) + '/' + fmtInt(c.n) + ' เที่ยว)'); c.dcs.forEach(function(r, i){ L.push('     ' + (i + 1) + '. ' + r.label + ' ' + r.v.toFixed(2) + '%'); }); });
+  M.boxes.slice(1).forEach(function(B){ var on = B.rows[1][1]; L.push('▫️ ' + B.title + ' Ontime: รวม ' + on.all.p.toFixed(2) + '% · ทัน ' + on.t.p.toFixed(2) + '% · ตก ' + on.l.p.toFixed(2) + '%'); });
+  return L;
+}
+
 function info169(){
+  if(isNewPlan()) return info169Plan();
   var W = 1920, H = 1080, m = 30, head = 120, foot = 54, X = info169Data(), b = '', g = 16;
   // แถวการ์ด KPI 8 ใบ
   var ky = head + 20, kh = 196, cw = (W - 2 * m - 7 * g) / 8;
@@ -446,6 +540,7 @@ function mark(d){ return !d || d.up === null ? '' : d.up ? ' ✅' : ' ⚠️'; }
 function summaryText(){
   var S = scopeText(), K = kpiData(), L = ['📊 NIMEX Pickup Vehicle Dashboard', '🗓️ ' + S.gran + ' ' + S.range + (S.has ? '  |  🔁 เทียบ ' + S.cmp : '') + '  |  📍 ' + S.scope];
   var sec = function(t){ L.push(''); L.push(t); };
+  if(isNewPlan()) planSummaryLines().forEach(function(x){ L.push(x); });
   if(picked.has('kpi')){
     sec('🎯 ผลสำคัญ · 🚚 ' + fmtInt(K.total) + ' เที่ยว' + (K.totalD ? ' (' + K.totalD.txt + ')' : ''));
     var E = { ontime:'⏱️', delay:'🐢', pending:'⌛' };
@@ -515,6 +610,7 @@ function sheetsData(){
     });
     out.push([('ดีแย่ ' + M.t.replace(/[\\\/\?\*\[\]:]/g, 'ต่อ').replace(/[()]/g, '')).slice(0, 31), rows]);
   });
+  if(isNewPlan()) out.unshift(['แผนใหม่ สรุป', planSheetRows()]);
   return out.map(function(sh){ return [PL(sh[0]).slice(0, 31), sh[1].map(function(r){ return r.map(function(c){ return typeof c === 'string' ? PL(c) : c; }); })]; });
 }
 

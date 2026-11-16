@@ -2403,7 +2403,7 @@ function wireAnalysis(){
 // [ปรับ 14/11/2569] โค้ดแชร์/ส่งออกย้ายไปไฟล์ share.js (โหลดก่อน app.js) — ส่งฟังก์ชันคำนวณเดิมให้ใช้ตรงๆ ไม่คำนวณซ้ำ
 function wireShare(){
   if(!window.PickupShare){ console.error("[share] share.js not loaded"); return; }
-  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor });
+  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan });
 }
 
 function wireEvents(){
@@ -2863,6 +2863,62 @@ function planAgg(trips){
   });
   return { cust:o.ทัน.c.size + o.ตก.c.size, custT:o.ทัน.c.size, custL:o.ตก.c.size, bills:o.ทัน.b + o.ตก.b, billsT:o.ทัน.b, billsL:o.ตก.b, items:o.ทัน.i + o.ตก.i, itemsT:o.ทัน.i, itemsL:o.ตก.i };
 }
+// ===================== [ปรับ 16/11/2569] แผนใหม่: นับตามลูกค้า (แบบ ก) =====================
+// ลูกค้าแต่ละราย (1 ราย ใน 1 เที่ยว) วัดกับเวลาตัดของกลุ่มตัวเอง: ทัน = เวลาตัด DC (หน้าตั้งค่า) · ตก = 20:00
+// เที่ยวช่องรวม = Ontime เมื่อลูกค้าทุกรายในเที่ยวทันเวลา (เท่ากับสถานะเที่ยวเดิม) · เที่ยวของกลุ่ม = เที่ยวที่มีลูกค้ากลุ่มนั้น
+// บิล/กล่อง นับตามสถานะของลูกค้าเจ้าของบิล · เที่ยวที่ไม่มีเวลากลับ (ประมาณการ) = Delay · ยังไม่กลับ = รถที่ยังไม่มีเวลากลับของวันนี้
+function planPickStatus(t, cut){
+  if(t.customers && state.excludedCustomers && state.excludedCustomers.size && t.customers.some(function(c){ return state.excludedCustomers.has(c); })) return 'on';
+  if(!t.arriveDC) return 'pe';
+  if(t.arriveSynthetic) return 'de';
+  if(t.arriveDC.dateKey === t.dateKey) return t.arriveDC.timeOfDayMin <= cut ? 'on' : 'de';
+  return t.arriveDC.dateKey < t.dateKey ? 'on' : 'de';
+}
+function planStats(trips){
+  var Z = function(){ return { t:{ n:0, on:0, de:0, pe:0 }, c:{ n:0, on:0, de:0, pe:0 }, b:{ n:0, on:0, de:0, pe:0 }, i:{ n:0, on:0, de:0, pe:0 }, cuSet:new Set(), cu:0 }; };
+  var R = { all:Z(), t:Z(), l:Z() }, keys = new Set(trips.map(function(t){ return t.key; })), byTrip = new Map();
+  state.lineItems.forEach(function(li){
+    if(!li.plan) return; var t = state.lineItemTripMap.get(li.idx); if(!t || !keys.has(t.key)) return;
+    var p = li.plan, ck = p.dcCode + '|' + (p.code && p.code !== '-' ? p.code : 'N:' + planNormName(p.name));
+    if(!byTrip.has(t.key)) byTrip.set(t.key, new Map());
+    var m = byTrip.get(t.key); if(!m.has(ck)) m.set(ck, { g: p.group === 'ทัน' ? 't' : 'l', b:0, i:0 });
+    var o = m.get(ck); o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems;
+  });
+  trips.forEach(function(t){
+    var m = byTrip.get(t.key); if(!m) return;
+    var res = {};
+    m.forEach(function(o, ck){
+      var st = planPickStatus(t, o.g === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF); res[o.g] = st;
+      ['all', o.g].forEach(function(g){ var X = R[g]; X.c.n++; X.c[st]++; X.b.n += o.b; X.b[st] += o.b; X.i.n += o.i; X.i[st] += o.i; X.cuSet.add(ck); });
+    });
+    Object.keys(res).forEach(function(g){ R[g].t.n++; R[g].t[res[g]]++; });
+    var v = Object.keys(res).map(function(g){ return res[g]; }), a = v.indexOf('pe') !== -1 ? 'pe' : v.indexOf('de') !== -1 ? 'de' : 'on';
+    R.all.t.n++; R.all.t[a]++;
+  });
+  ['all','t','l'].forEach(function(g){ R[g].cu = R[g].cuSet.size; });
+  return R;
+}
+window.__pickupPlanStats = planStats;
+var PV_G = ['all','t','l'], PV_GN = { all:'รวม', t:'กลุ่มทัน Cut off', l:'กลุ่มตก Cut off' }, PV_GS = { all:'ทุกลูกค้าในแผน', t:'ตัดตามเวลา DC', l:'ตัด 20:00' };
+var PV_GC = { all:'#d4af37', t:'#1d57b8', l:'#1a1a1a' }, PV_GT = { all:'#0a2a5e', t:'#fff', l:'#fff' };
+function pvPct(a, b){ return b ? a / b * 100 : 0; }
+function pvF2(x){ return x.toFixed(2); }
+function pvDelta(x, unit, goodUp, light){
+  if(x === null || x === undefined || !isFinite(x)) return '<span class="pv-z">–</span>';
+  if(Math.abs(x) < 0.005) return '<span class="pv-z">เท่าเดิม</span>';
+  var ok = (x > 0) === goodUp, cls = light ? (ok ? 'pv-gl' : 'pv-bl') : (ok ? 'pv-g' : 'pv-b');
+  return '<span class="' + cls + '">' + (x > 0 ? '▲ ' : '▼ ') + pvF2(Math.abs(x)) + unit + '</span>';
+}
+function pvChg(c, p){ return p ? (c - p) / p * 100 : null; }
+// รายชื่อ DC เรียงจาก Ontime % (เที่ยว) ดีที่สุด
+function planDcRank(trips, prevTrips, g){
+  var codes = Array.from(new Set(trips.map(function(t){ return t.dcCode; }))).filter(Boolean);
+  return codes.map(function(code){
+    var c = planStats(trips.filter(function(t){ return t.dcCode === code; }))[g].t, p = prevTrips ? planStats(prevTrips.filter(function(t){ return t.dcCode === code; }))[g].t : null;
+    var info = state.dcList.find(function(d){ return d.code === code; });
+    return { code:code, label:(info ? info.label : code), v:pvPct(c.on, c.n), pv: p && p.n ? pvPct(p.on, p.n) : null, on:c.on, n:c.n };
+  }).filter(function(r){ return r.n > 0; }).sort(function(a, b){ return b.v - a.v || b.n - a.n; });
+}
 function renderPlanBoxes(filtered){
   var box = document.getElementById('planBoxes'), note = document.getElementById('planNote'), on = isNewPlan();
   document.body.classList.toggle('plan-new', on);
@@ -2870,20 +2926,46 @@ function renderPlanBoxes(filtered){
   if(box) box.hidden = !on; if(note) note.hidden = !on;
   if(!on) return;
   var sc = planScopeRows(), nT = sc.filter(function(p){ return p.group === 'ทัน'; }).length;
-  note.innerHTML = '📋 <b>แผนใหม่</b> (เริ่มใช้ ' + thDateKey(PLAN_START) + ') · วัดเฉพาะสินค้าแห้งของลูกค้าในแผน ' + fmtInt(sc.length) + ' ราย · <span class="product-ab">กลุ่มทัน ' + fmtInt(nT) + ' ราย ตัดตามเวลา DC</span> · <span class="product-cc">กลุ่มตก ' + fmtInt(sc.length - nT) + ' ราย ตัด 20:00</span>' + (state.dateFrom && state.dateFrom < PLAN_START ? ' · <span class="muted">ช่วงที่เลือกมีวันก่อนเริ่มแผน (คำนวณย้อนหลังเพื่อเทียบ)</span>' : '');
-  var A = planAgg(filtered || applyFilters()), pi = prevTripsForPeriod(), P = pi ? planAgg(pi.trips) : null;
-  var cards = [
-    { id:'planCust', l:'ลูกค้าในแผนที่เข้ารับ', v:fmtInt(A.cust) + ' / ' + fmtInt(sc.length) + ' ราย', a:A.custT, b:A.custL, ta:' / ' + fmtInt(nT), tb:' / ' + fmtInt(sc.length - nT), cur:A.cust, prev:P && P.cust, acc:'accent-navy' },
-    { id:'planBills', l:'จำนวนบิล (ลูกค้าในแผน)', v:fmtInt(A.bills), a:A.billsT, b:A.billsL, ta:'', tb:'', cur:A.bills, prev:P && P.bills, acc:'accent-gold' },
-    { id:'planItems', l:'จำนวนกล่อง (ลูกค้าในแผน)', v:fmtInt(A.items), a:A.itemsT, b:A.itemsL, ta:'', tb:'', cur:A.items, prev:P && P.items, acc:'accent-route' },
-  ];
-  box.innerHTML = cards.map(function(c){
-    var d = P ? fmtDelta(c.cur, c.prev, { mode:'pct', good:true }) : null;
-    return '<div class="card kpi-card kpi-mini ' + c.acc + '" id="' + c.id + '"><div class="kpi-label">' + c.l + '</div><div class="kpi-value tabnum">' + c.v + '</div>' +
-      '<div class="kpi-cmp">' + (d ? '<span class="' + (d.cls || '') + '">' + d.h + ' เทียบช่วงก่อน</span>' : '<span class="muted">ไม่มีช่วงก่อนหน้า</span>') + '</div>' +
-      '<div class="kpi-breakdown"><div class="bd-item"><span class="bd-label product-ab">กลุ่มทัน</span><span class="bd-value tabnum product-ab">' + fmtInt(c.a) + c.ta + '</span></div>' +
-      '<div class="bd-item"><span class="bd-label product-cc">กลุ่มตก</span><span class="bd-value tabnum product-cc">' + fmtInt(c.b) + c.tb + '</span></div></div></div>';
-  }).join('');
+  note.innerHTML = '📋 <b>แผนใหม่</b> (เริ่มใช้ ' + thDateKey(PLAN_START) + ') · วัดเฉพาะสินค้าแห้งของลูกค้าในแผน ' + fmtInt(sc.length) + ' ราย · <span style="color:' + PV_GC.t + ';font-weight:600">กลุ่มทัน ' + fmtInt(nT) + ' ราย ตัดตามเวลา DC</span> · <span class="pv-black">กลุ่มตก ' + fmtInt(sc.length - nT) + ' ราย ตัด 20:00</span>' + (state.dateFrom && state.dateFrom < PLAN_START ? ' · <span class="muted">ช่วงที่เลือกมีวันก่อนเริ่มแผน (คำนวณย้อนหลังเพื่อเทียบ)</span>' : '');
+  box.innerHTML = planViewHtml(filtered || applyFilters());
+}
+function planViewHtml(trips){
+  var pi = prevTripsForPeriod(), C = planStats(trips), P = pi ? planStats(pi.trips) : null;
+  var cell = function(n, p, d){ return '<td class="n">' + n + '</td><td class="p">' + p + '</td><td class="d">' + d + '</td>'; };
+  var rTotal = function(lbl, m){
+    return '<tr class="pv-tt"><td class="lb">' + lbl + '</td>' + PV_G.map(function(g){
+      var n = m === 'cu' ? C[g].cu : C[g][m].n, an = m === 'cu' ? C.all.cu : C.all[m].n, pn = P ? (m === 'cu' ? P[g].cu : P[g][m].n) : null;
+      return cell(fmtInt(n), g === 'all' ? '100.00%' : pvF2(pvPct(n, an)) + '%', P ? pvDelta(pvChg(n, pn), '%', true) : '<span class="pv-z">–</span>');
+    }).join('') + '</tr>';
+  };
+  var rRate = function(lbl, m, k, goodUp, hl){
+    return '<tr class="' + (hl || '') + '"><td class="lb">' + lbl + '</td>' + PV_G.map(function(g){
+      var v = pvPct(C[g][m][k], C[g][m].n), pv = P && P[g][m].n ? pvPct(P[g][m][k], P[g][m].n) : null;
+      return cell(fmtInt(C[g][m][k]), pvF2(v) + '%', pv === null ? '<span class="pv-z">–</span>' : pvDelta(v - pv, ' จุด', goodUp));
+    }).join('') + '</tr>';
+  };
+  var rates = function(m){ return rRate('Ontime', m, 'on', true, 'pv-hl') + rRate('Delay', m, 'de', false) + rRate('ยังไม่กลับ', m, 'pe', false); };
+  var cols = '<colgroup><col class="c0">' + '<col class="cn"><col class="cp"><col class="cd">'.repeat(3) + '</colgroup>';
+  var sub = '<tr class="pv-sh"><td class="lb">รายการ</td>' + '<td class="n">จำนวน</td><td class="p">%</td><td class="d">เทียบช่วงก่อน</td>'.repeat(3) + '</tr>';
+  var box = function(icon, title, desc, body){ return '<section class="pv-box"><div class="pv-bh"><span class="pv-ic">' + icon + '</span><b>' + title + '</b><span class="pv-desc pv-admin">🔒 ' + desc + '</span></div><table class="pv-t">' + cols + sub + body + '</table></section>'; };
+  var dcSel = state.selectedDC ? (state.dcList.find(function(d){ return d.code === state.selectedDC; }) || { label:state.selectedDC }).label : '';
+  var kc = function(g){
+    var c = C[g].t, v = pvPct(c.on, c.n), pv = P && P[g].t.n ? pvPct(P[g].t.on, P[g].t.n) : null, list;
+    if(dcSel) list = '<div class="pv-kone">' + escapeHtml(dcSel) + '</div>';
+    else list = '<table class="pv-kdc">' + planDcRank(trips, pi ? pi.trips : null, g).map(function(r, i){
+      return '<tr><td><span class="pv-rk">' + (i + 1) + '</span>' + escapeHtml(r.label) + '</td><td class="r1">' + pvF2(r.v) + '%</td><td class="r2">' + (r.pv === null ? '<span class="pv-z">–</span>' : pvDelta(r.v - r.pv, ' จุด', true, true)) + '</td><td class="r3">' + fmtInt(r.on) + '/' + fmtInt(r.n) + '</td></tr>';
+    }).join('') + '</table>';
+    return '<div class="pv-kc"><b class="pv-kg" style="background:' + PV_GC[g] + ';color:' + PV_GT[g] + '">' + (g === 'all' ? 'รวม' : g === 't' ? 'กลุ่มทัน' : 'กลุ่มตก') + '</b><div class="pv-kl">Ontime % (เที่ยว)</div><div class="pv-kv">' + (c.n ? pvF2(v) + '%' : '–') + '</div>' +
+      '<div class="pv-kd">' + (pv === null ? '<span class="pv-z2">ไม่มีช่วงก่อนหน้า</span>' : pvDelta(v - pv, ' จุด', true, true) + ' <span>เทียบช่วงก่อน</span>') + '</div><div class="pv-ks">' + fmtInt(c.on) + ' จาก ' + fmtInt(c.n) + ' เที่ยว</div>' + list + '<i style="background:' + (g === 'l' ? '#000' : PV_GC[g]) + '"></i></div>';
+  };
+  var head = '<table class="pv-t pv-gh">' + cols + '<tr><td><div class="pv-ghb" style="background:#0a2a5e;color:#fff;text-align:left;padding-left:16px">แผนใหม่<div>เทียบ 3 มุมมอง</div></div></td>' +
+    PV_G.map(function(g){ return '<td colspan="3"><div class="pv-ghb" style="background:' + PV_GC[g] + ';color:' + PV_GT[g] + '">' + PV_GN[g] + '<div>' + PV_GS[g] + '</div></div></td>'; }).join('') + '</tr></table>';
+  return '<div class="pv-kcs">' + kc('all') + kc('t') + kc('l') + '</div>' + head +
+    box('🚚', 'เที่ยว', '1 เที่ยวมีได้ทั้ง 2 กลุ่ม · ช่องรวม Ontime เมื่อลูกค้าทุกรายในเที่ยวทันเวลา', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
+    box('👥', 'ลูกค้า', 'Ontime / Delay / ยังไม่กลับ นับครั้งที่เข้ารับลูกค้า (ลูกค้า 1 ราย ใน 1 เที่ยว = 1 ครั้ง) · วัดกับเวลาตัดของกลุ่มลูกค้า', rTotal('ลูกค้า (ราย)', 'cu') + rates('c')) +
+    box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
+    box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
+    '<p class="pv-foot pv-admin">🔒 เทียบช่วงก่อน: จำนวน = % เปลี่ยนแปลง · อัตรา = จุด · <span class="pv-g">น้ำเงิน = ดีขึ้น</span> · <span class="pv-b">แดง = แย่ลง</span> · "ยังไม่กลับ" เป็นรถของวันนี้ที่ยังไม่ถึงคลัง' + (dcSel ? '' : ' · รายชื่อ DC ในกรอบบนเรียงจาก % ดีที่สุด') + '</p>';
 }
 function setPlanMode(mode, quiet){
   if(mode === 'new' && !PLAN.rows.length){ showToast('ยังไม่มีแผนลูกค้าในระบบ · ผู้ดูแลนำเข้าได้ที่ ตั้งค่า → แผนลูกค้า'); mode = 'old'; quiet = true; }
@@ -2891,7 +2973,7 @@ function setPlanMode(mode, quiet){
   rebuildTripsFromLineItems(); buildZoneOptions(); buildDCOptions(); updateHeaderMeta(); renderAll();
   if(document.getElementById('tabProblems').style.display !== 'none') renderProblemsTab();
   planRelabelDom(); renderPlanSettings();
-  if(!quiet) showToast(mode === 'new' ? 'แสดงผลตามแผนใหม่ (เฉพาะสินค้าแห้งของลูกค้าในแผน · แยกกลุ่มทัน/ตก Cut off)' : 'แสดงผลตามแผนเดิม');
+  if(!quiet) showToast(mode === 'new' ? (document.body.classList.contains('is-admin') ? 'แสดงผลตามแผนใหม่ (เฉพาะสินค้าแห้งของลูกค้าในแผน · แยกกลุ่มทัน/ตก Cut off)' : 'แสดงผลตามแผนใหม่') : 'แสดงผลตามแผนเดิม');
 }
 function planTimeStr(v){
   if(typeof v === 'number' && isFinite(v)){ var m = Math.round((v % 1) * 1440); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
