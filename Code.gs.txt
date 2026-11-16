@@ -1,10 +1,12 @@
 /** NIMEX Pickup Vehicle Dashboard API — bound to the "NIMEX Pickup Database" spreadsheet.
  *  Set Script Property ADMIN_KEY (Project Settings > Script Properties). The key is never stored in this file.
  *  GET  : public data for the dashboard (rows + shared settings), cached for 6 hours.
- *  POST : admin only (body.key must equal ADMIN_KEY) — auth, begin/append/finish (upload a report), settings.
+ *  POST : admin only (body.key must equal ADMIN_KEY) — auth, begin/append/finish (upload a report), settings, plan.
+ *  [ปรับ 16/11/2569] แท็บ Plan = แผนลูกค้า (แผนใหม่) แก้ในชีตได้โดยตรง หรือเพิ่ม/ลบ/นำเข้าจากหน้าตั้งค่าของแดชบอร์ด
  */
 var COLS = ['day','b','c','e','g','h','t','k','l','n','o','p','q','r','s','u','v','x','y','aa','ab','ac','ad','ae','af','ag','ah','ai','aj'];
-var TABS = { rows: ['Rows', COLS], settings: ['Settings', ['key','json']], log: ['Log', ['time','action','detail']] };
+var PLAN_COLS = ['DC ต้นทาง','รหัสลูกค้า','ชื่อบริษัท','ตำบล/แขวง','อำเภอ/เขต','โซนลูกค้า','ประเภทลูกค้า','ประเภทรถ','ผล','เวลาเข้าคลัง'];
+var TABS = { rows: ['Rows', COLS], settings: ['Settings', ['key','json']], log: ['Log', ['time','action','detail']], plan: ['Plan', PLAN_COLS] };
 
 function ss_(){ return SpreadsheetApp.getActiveSpreadsheet(); }
 function tab_(k){
@@ -29,7 +31,9 @@ function log_(a, d){ tab_('log').appendRow([new Date(), a, d]); }
 
 function publicData_(){
   var rows = readAll_('rows').map(function(r){ return r.slice(1).map(function(v){ return v === null || v === undefined ? '' : String(v); }); });
-  return { cols: COLS.slice(1), rows: rows, settings: settings_(), updated: new Date().toISOString() };
+  var tz = Session.getScriptTimeZone();
+  var plan = readAll_('plan').map(function(r){ return r.map(function(v){ return v instanceof Date ? Utilities.formatDate(v, tz, 'HH:mm') : (v === null || v === undefined ? '' : String(v)); }); });
+  return { cols: COLS.slice(1), rows: rows, settings: settings_(), plan: plan, updated: new Date().toISOString() };
 }
 
 // ---- cache: gzip + base64 split into 90 KB pieces (CacheService limit is 100 KB per key) ----
@@ -97,6 +101,13 @@ function doPost(e){
       log_('settings', Object.keys(patch).join(', '));
       cacheClear_(); warm_();
       return json_({ ok:true });
+    }
+    if(b.a === 'plan'){
+      var pw = PLAN_COLS.length, prow = (b.rows || []).filter(function(r){ return r && r.length === pw && String(r[1]).trim() !== ''; });
+      writeAll_('plan', prow);
+      log_('plan', prow.length + ' customers');
+      cacheClear_(); warm_();
+      return json_({ ok:true, count: prow.length });
     }
     return json_({ ok:false, error:'unknown' });
   } finally { lock.releaseLock(); }

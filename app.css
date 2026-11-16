@@ -433,3 +433,16 @@ body[data-tab="tabSettings"] .page-h .ph-r{display:none}
 .plan-grid span{font-size:12px;color:var(--muted)}.plan-grid b{font-size:15px}
 .note-l{font-size:13.5px;color:var(--ink)!important;margin:0}
 #uploadModal{z-index:350}
+/* [ปรับ 16/11/2569] แผนเดิม/แผนใหม่ */
+.plan-seg{display:inline-flex;border:1px solid var(--line2);border-radius:999px;padding:2px;background:var(--panel);gap:2px}
+.plan-seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.plan-seg button.on{background:var(--navy2);color:#fff}
+.plan-note{margin:6px 0 10px;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px dashed var(--gold-l);font-size:13px;line-height:1.6}
+.plan-boxes{margin-bottom:10px}
+@media (min-width:900px){.plan-boxes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.plan-form{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.plan-form input,.plan-form select{flex:1 1 130px;min-width:0;padding:7px 9px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px}
+.plan-h{margin:16px 0 4px;font-size:15px}
+.btn-ghost.sm{padding:3px 10px;font-size:12px}
+td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+@media (min-width:900px){.set-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}

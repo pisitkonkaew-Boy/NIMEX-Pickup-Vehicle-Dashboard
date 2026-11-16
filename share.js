@@ -31,7 +31,10 @@ var GRADE_C = { A:'#18864b', B:'#5aa469', C:'#d4a017', D:'#e07b39', F:'#c0392b' 
 function gradeOf(kind, rate){ var G = GRADE[kind], v = rate * 100; for(var i = 0; i < G.cut.length; i++){ if(G.hi ? v >= G.cut[i][0] : v <= G.cut[i][0]) return G.cut[i][1]; } return 'F'; }
 function showGrade(){ var D = window.__PICKUP_DATA; return !!(D && D.settings && D.settings.showGrade); }
 var AB_C = '#b8860b', CC_C = '#1d57b8';
-function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+// [ปรับ 16/11/2569] แผนใหม่: ข้อความ AB/CC ในไฟล์ส่งออกเปลี่ยนเป็น กลุ่มทัน/กลุ่มตก
+function PL(s){ return window.__pickupPlanLabel ? window.__pickupPlanLabel(s) : s; }
+function isNewPlan(){ return !!(window.__pickupIsNewPlan && window.__pickupIsNewPlan()); }
+function esc(s){ return PL(String(s === null || s === undefined ? '' : s)).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
 function niceMax(v){ if(v <= 0) return 1; var e = Math.pow(10, Math.floor(Math.log10(v))), n = v / e; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * e; }
 var ICN = {
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/>', hour:'<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9"/>',
@@ -83,7 +86,7 @@ function gradeTxt(M, r){ return M.g && showGrade() ? gradeOf(M.g, r.val) : ''; }
 function scopeText(){
   var G = { day:'รายวัน', week:'รายสัปดาห์', month:'รายเดือน' }[state.granularity] || '';
   var p = previousPeriod(state.dateFrom, state.dateTo, state.granularity), minK = dataMinKey(), has = p && minK && p.from >= minK;
-  var f = [];
+  var f = isNewPlan() ? ['แผนใหม่'] : [];
   if(state.selectedDC){ var d = state.dcList.find(function(x){ return x.code === state.selectedDC; }); f.push('DC ' + (d ? d.label : state.selectedDC)); }
   else if(state.selectedZone) f.push('ภาค ' + state.selectedZone);
   else f.push(state.dcList.length + ' DC');
@@ -416,7 +419,7 @@ function info169(){
   b += panel(m + pw + g, top + ch + g, pw, ch, ttl, b4, '');
   // แถบท้าย: หมายเหตุสูตร
   var n1 = 'Ontime % = เที่ยวที่กลับถึง DC ไม่เกินเวลาตัด ÷ เที่ยวทั้งหมด · Delay % = เที่ยวที่กลับหลังเวลาตัด ÷ เที่ยวทั้งหมด · ล่าช้าเฉลี่ย = นาทีเกินเวลาตัด (นับไม่เกิน 22:00) เฉลี่ยเฉพาะเที่ยวล่าช้า · บิล/ชิ้นต่อคัน = รวม ÷ จำนวนเที่ยว',
-      n2 = 'วันทำการ จันทร์–เสาร์ · เทียบช่วงก่อนด้วยจำนวนวันทำการเท่ากัน · เขียว = ดีขึ้น แดง = แย่ลง' + (X.grade ? ' · เกรด Ontime %: ' + GRADE.on.note + ' · Delay %: ' + GRADE.de.note : '') + ' · ข้อมูลจากรายงาน NIMEX016267';
+      n2 = 'วันทำการ จันทร์–เสาร์ · เทียบช่วงก่อนด้วยจำนวนวันทำการเท่ากัน · เขียว = ดีขึ้น แดง = แย่ลง' + (X.grade ? ' · เกรด Ontime %: ' + GRADE.on.note + ' · Delay %: ' + GRADE.de.note : '') + (isNewPlan() ? ' · แผนใหม่: เฉพาะสินค้าแห้งของลูกค้าในแผน กลุ่มทันตัดตามเวลา DC กลุ่มตกตัด 20:00' : '') + ' · ข้อมูลจากรายงาน NIMEX016267';
   b += '<rect y="' + (H - foot) + '" width="' + W + '" height="' + foot + '" fill="#0a2a5e"/><rect y="' + (H - foot) + '" width="' + W + '" height="3" fill="#d4af37"/>' +
     '<text x="' + W / 2 + '" y="' + (H - foot + 22) + '" text-anchor="middle" font-size="13.5" fill="#dfe8f7">' + esc(n1) + '</text><text x="' + W / 2 + '" y="' + (H - foot + 42) + '" text-anchor="middle" font-size="13" fill="#e6d79c">' + esc(n2) + '</text>';
   return wrapSvg(W, H, sheetHead(W, head, 'h169') + b);
@@ -482,7 +485,7 @@ function summaryText(){
     });
   });
   if(!S.has) { L.push(''); L.push('ℹ️ ไม่มีช่วงก่อนหน้าให้เทียบ'); }
-  return L.join('\n');
+  return PL(L.join('\n'));
 }
 
 // ---------- Excel ----------
@@ -512,13 +515,13 @@ function sheetsData(){
     });
     out.push([('ดีแย่ ' + M.t.replace(/[\\\/\?\*\[\]:]/g, 'ต่อ').replace(/[()]/g, '')).slice(0, 31), rows]);
   });
-  return out;
+  return out.map(function(sh){ return [PL(sh[0]).slice(0, 31), sh[1].map(function(r){ return r.map(function(c){ return typeof c === 'string' ? PL(c) : c; }); })]; });
 }
 
 // ---------- save + share sheet ----------
 function stamp(){
   var f = state.dateFrom || '', per = state.granularity === 'month' ? f.slice(0,7) : state.granularity === 'week' ? f + '-week' : f;
-  return 'NIMEX-Pickup-' + per + (state.selectedDC ? '-DC' + state.selectedDC : state.selectedZone ? '-Zone' : '') + (state.productFilter ? (state.productFilter === 'แห้ง' ? '-AB' : '-CC') : '');
+  return 'NIMEX-Pickup-' + per + (state.selectedDC ? '-DC' + state.selectedDC : state.selectedZone ? '-Zone' : '') + (state.productFilter ? (state.productFilter === 'แห้ง' ? '-AB' : '-CC') : '') + (isNewPlan() ? '-แผนใหม่' : '');
 }
 function xsay(m){ var x = document.getElementById('xmsg'); if(x) x.textContent = m; }
 function saveFile(name, blob){

@@ -117,6 +117,13 @@ window.__pickupSaveSettings = async function(patch){
   catch(e){ toast('บันทึกการตั้งค่าไม่สำเร็จ: ' + e.message); }
 };
 
+// [ปรับ 16/11/2569] แผนลูกค้า (แผนใหม่) — แทนที่ทั้งแท็บ Plan ใน Sheet (admin)
+window.__pickupSavePlan = async function(rows){
+  if(!window.__PICKUP_ADMIN) throw new Error('ต้องเข้าสู่ระบบผู้ดูแล');
+  try{ return await api({ a:'plan', rows: rows }); }
+  catch(e){ throw new Error(e.message === 'unknown' ? 'Apps Script ยังเป็นเวอร์ชันเก่า (ต้อง Deploy Code.gs ใหม่ก่อน)' : e.message === 'denied' ? 'รหัสผู้ดูแลไม่ถูกต้องหรือหมดอายุ' : e.message); }
+};
+
 function askKey(err){
   bootMsg('<img src="logo.png" alt="NIM Express" class="boot-logo"><h1>ผู้ดูแลระบบ</h1>' + (err ? '<p class="badt">' + esc(err) + '</p>' : '') +
     '<label for="adm-key">รหัสผู้ดูแล</label><input id="adm-key" type="password" autocomplete="current-password">' +

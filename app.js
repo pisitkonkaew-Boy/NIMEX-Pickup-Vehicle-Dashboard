@@ -241,7 +241,8 @@ function buildLineItems(rawRows) {
 // reportEndDateKey: the last date covered by the report (from row 3 of the source file). Used to decide
 // whether a trip with no Q/R at all is genuinely still out (report just ended) or badly overdue (Delay).
 function __todayKey() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustomers) {
+// [ปรับ 16/11/2569] planOpt (แผนใหม่ เท่านั้น): { cutoff(items, dcCode) -> นาที, product(items) -> 'แห้ง'|'เย็น' } · ไม่ส่ง planOpt = คำนวณแบบเดิมทุกอย่าง
+function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustomers, planOpt) {
   const byB = new Map();
   for (const li of lineItems) {
     if (!li.b) continue;
@@ -341,10 +342,12 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
       productInferred = true;
       productTypes.clear(); productTypes.add(dominantProduct);
     }
+    // แผนใหม่: ช่อง AB/CC ใช้แทนกลุ่มลูกค้า (แห้ง = กลุ่มทัน Cut off, เย็น = กลุ่มตก Cut off)
+    if (planOpt) { dominantProduct = planOpt.product(items); productInferred = false; productTypes.clear(); productTypes.add(dominantProduct); }
 
     // status
     let status = 'pending'; // ยังไม่กลับเข้าคลัง
-    const cutoffMin = resolveCutoffMinutes(dcCodeV, dominantProduct, cutoffOverrides);
+    const cutoffMin = planOpt ? planOpt.cutoff(items, dcCodeV) : resolveCutoffMinutes(dcCodeV, dominantProduct, cutoffOverrides);
     let delayMinutes = null;
     if (dispatch && arriveDC) {
       if (arriveDC.dateKey === dispatch.dateKey) {
@@ -365,6 +368,9 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
         }
       }
     }
+
+    // แผนใหม่: เที่ยวที่ไม่มีเวลากลับเลย (ประมาณการ 20:00) นับเป็น Delay เสมอ แม้กลุ่มตกตัดที่ 20:00
+    if (planOpt && arriveSynthetic && status === 'ontime') { status = 'delay'; delayMinutes = null; }
 
     // [ปรับ 08/11/2569] นาทีล่าช้านับได้ไม่เกิน 22:00 น. ของวันจัดรถ (เพดาน = 22:00 - เวลาตัด)
     if (status === 'delay' && delayMinutes !== null && cutoffMin !== null) {
@@ -625,8 +631,93 @@ var DC_DIRECTORY = {}; // { dcCode: { name, zone } } - full list from Index.xlsx
 var REPORT_END_DATE_KEY = null;
 var CUTOFF_OVERRIDES = {}; // { dcCode: { 'แห้ง': minutes, 'เย็น': minutes } } - applied (in-effect) settings
 
+// ===================== [ปรับ 16/11/2569] แผนเดิม / แผนใหม่ =====================
+// แผนใหม่ = วัดเฉพาะสินค้าแห้งของลูกค้าในแผน (แท็บ Plan ใน Google Sheet) แบ่ง 2 กลุ่มตามที่แผนระบุ
+//   กลุ่มทัน Cut off : เวลาตัดของ DC เดิม (ตามหน้าตั้งค่า) · กลุ่มตก Cut off : 20:00
+//   1 เที่ยวอยู่กลุ่มทัน ถ้ามีลูกค้ากลุ่มทันอย่างน้อย 1 ราย · เที่ยวที่ไม่มีเวลากลับเลย = Delay
+//   ช่อง AB/CC ทุกจุดแสดงเป็น กลุ่มทัน/กลุ่มตก · ลูกค้า AB นอกแผน และสินค้า CC ไม่นับ (ดูรายชื่อที่ ตั้งค่า → แผนลูกค้า)
+var PLAN_START = '2026-11-16', PLAN_LATE_CUTOFF = 20 * 60;
+var PLAN = { rows: [], map: new Map() };
+function planNormCode(v){ return String(v === null || v === undefined ? '' : v).trim().replace(/\.0+$/, '').toUpperCase(); }
+function planGroupOf(v){ return String(v || '').indexOf('ทัน') !== -1 ? 'ทัน' : 'ตก'; }
+function loadPlan(rows){
+  PLAN.rows = (rows || []).filter(function(r){ return r && r[1] !== '' && r[1] !== null && r[1] !== undefined; }).map(function(r){
+    return { dc:String(r[0] || '').trim(), dcCode:dcCode(r[0]), code:planNormCode(r[1]), name:String(r[2] || ''), sub:String(r[3] || ''), district:String(r[4] || ''),
+      zone:String(r[5] || ''), ctype:String(r[6] || ''), vtype:String(r[7] || ''), group:planGroupOf(r[8]), time:String(r[9] || '') };
+  });
+  PLAN.map = new Map(); PLAN.rows.forEach(function(p){ PLAN.map.set(p.dcCode + '|' + p.code, p); });
+}
+function planRowsOut(){ return PLAN.rows.map(function(p){ return [p.dc, p.code, p.name, p.sub, p.district, p.zone, p.ctype, p.vtype, p.group + ' Cut off', p.time]; }); }
+function isNewPlan(){ return state.planMode === 'new' && PLAN.rows.length > 0; }
+window.__pickupIsNewPlan = isNewPlan;
+function planIsAB(li){ return li.productType === 'แห้ง' || (!li.productType && (li.dryBills + li.dryItems) > 0); }
+function planOf(li){ return PLAN.map.get(li.dcCode + '|' + planNormCode(li.customerCode)) || null; }
+function planLineItems(){
+  var out = [];
+  state.allLineItems.forEach(function(li){
+    if(!planIsAB(li)) return;
+    var p = planOf(li); if(!p) return;
+    var c = Object.assign({}, li); c.plan = p;
+    if(p.group === 'ตก'){ c.coldBills = li.dryBills; c.coldItems = li.dryItems; c.dryBills = 0; c.dryItems = 0; c.productType = 'เย็น'; }
+    else { c.coldBills = 0; c.coldItems = 0; c.productType = 'แห้ง'; }
+    out.push(c);
+  });
+  return out;
+}
+var PLAN_OPT = {
+  product: function(items){ return items.some(function(i){ return i.plan && i.plan.group === 'ทัน'; }) ? 'แห้ง' : 'เย็น'; },
+  cutoff: function(items, dc){ return PLAN_OPT.product(items) === 'แห้ง' ? resolveCutoffMinutes(dc, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF; },
+};
+// ลูกค้า AB ที่ไม่อยู่ในแผน (รอผู้ดูแลระบุ) — ไม่นับในแผนใหม่
+function planOutside(){
+  var m = new Map();
+  (state.allLineItems || []).forEach(function(li){
+    if(!planIsAB(li) || planOf(li) || !li.dcCode) return;
+    var k = li.dcCode + '|' + planNormCode(li.customerCode);
+    if(!m.has(k)) m.set(k, { dc:li.dc, dcCode:li.dcCode, code:planNormCode(li.customerCode), name:li.customer || '', lines:0, bills:0, items:0, first:null, last:null });
+    var o = m.get(k); o.lines++; o.bills += li.dryBills; o.items += li.dryItems;
+    var d = li.dispatch && li.dispatch.dateKey; if(d){ if(!o.first || d < o.first) o.first = d; if(!o.last || d > o.last) o.last = d; }
+  });
+  return Array.from(m.values()).sort(function(a, b){ return b.lines - a.lines; });
+}
+// ป้ายกำกับ: แผนใหม่แสดง AB/CC เป็น กลุ่มทัน/กลุ่มตก (เฉพาะคำ AB/CC ที่ยืนเดี่ยว ไม่แตะรหัสลูกค้า เช่น BKK-CC-0001)
+function planLabel(s){
+  if(!isNewPlan() || typeof s !== 'string' || (s.indexOf('AB') === -1 && s.indexOf('CC') === -1 && s.indexOf('แห้ง') === -1 && s.indexOf('เย็น') === -1)) return s;
+  return s.replace(/AB แห้ง/g, 'กลุ่มทัน').replace(/CC เย็น/g, 'กลุ่มตก').replace(/ประเภทสินค้า AB และ CC/g, 'กลุ่มทัน และ กลุ่มตก')
+    .replace(/สินค้า AB \(แห้ง\)/g, 'กลุ่มทัน Cut off').replace(/สินค้า CC \(เย็น\)/g, 'กลุ่มตก Cut off')
+    .replace(/AB \(แห้ง\)/g, 'กลุ่มทัน').replace(/CC \(เย็น\)/g, 'กลุ่มตก').replace(/สินค้า AB/g, 'กลุ่มทัน').replace(/สินค้า CC/g, 'กลุ่มตก')
+    .replace(/(^|[\s(·\/:|,"'>])AB(?=$|[\s)·\/:|,"'<]|\d)/g, '$1กลุ่มทัน').replace(/(^|[\s(·\/:|,"'>])CC(?=$|[\s)·\/:|,"'<]|\d)/g, '$1กลุ่มตก');
+}
+window.__pickupPlanLabel = planLabel;
+function planLabelRows(rows){ if(!isNewPlan()) return rows; return rows.map(function(r){ var o = {}; Object.keys(r).forEach(function(k){ o[planLabel(k)] = typeof r[k] === 'string' ? planLabel(r[k]) : r[k]; }); return o; }); }
+var __planTextOrig = new WeakMap();
+function planRelabelDom(root){
+  root = root || document.getElementById('appRoot') || document.body;
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), n, on = isNewPlan();
+  while((n = w.nextNode())){
+    var pe = n.parentNode; if(pe && (pe.nodeName === 'SCRIPT' || pe.nodeName === 'STYLE' || pe.nodeName === 'TEXTAREA' || (pe.closest && pe.closest('#tabSettings')))) continue;   // หน้าตั้งค่ายังเป็น AB/CC (เวลาตัดตามสินค้า)
+    var orig = __planTextOrig.get(n);
+    if(on){ var src = orig !== undefined ? orig : n.nodeValue, nv = planLabel(src); if(nv !== src){ if(orig === undefined) __planTextOrig.set(n, src); if(n.nodeValue !== nv) n.nodeValue = nv; } }
+    else if(orig !== undefined){ n.nodeValue = orig; __planTextOrig.delete(n); }
+  }
+}
+var __planObs = null;
+function planObserve(){
+  if(__planObs || typeof MutationObserver === 'undefined') return;
+  var busy = false;
+  __planObs = new MutationObserver(function(muts){
+    if(busy || !isNewPlan()) return; busy = true;
+    try{ muts.forEach(function(m){ if(m.type === 'characterData') planRelabelDom(m.target.parentNode || document.body); else m.addedNodes.forEach(function(nd){ if(nd.nodeType === 3) planRelabelDom(nd.parentNode); else if(nd.nodeType === 1) planRelabelDom(nd); }); }); }
+    finally { busy = false; }
+  });
+  __planObs.observe(document.getElementById('appRoot') || document.body, { childList:true, subtree:true, characterData:true });
+}
+
 function rebuildTripsFromLineItems(){
-  state.trips = window.Core.buildTrips(state.lineItems, REPORT_END_DATE_KEY, CUTOFF_OVERRIDES, state.excludedCustomers);
+  if(!state.allLineItems) state.allLineItems = state.lineItems || [];
+  var opt = null;
+  if(isNewPlan()){ state.lineItems = planLineItems(); opt = PLAN_OPT; } else state.lineItems = state.allLineItems;
+  state.trips = window.Core.buildTrips(state.lineItems, REPORT_END_DATE_KEY, CUTOFF_OVERRIDES, state.excludedCustomers, opt);
   state.trips.forEach(function(t){ t.zone = ZONE_LOOKUP[t.dcCode] || 'ไม่ระบุภาค'; });
   state.lineItemTripMap = new Map();
   state.trips.forEach(function(t){ t.lineItemIdx.forEach(function(idx){ state.lineItemTripMap.set(idx, t); }); });
@@ -658,7 +749,7 @@ function processRawRows(rawRows){
     return ALLOWED_DC_CODES.indexOf(code) !== -1;
   });
   state.rawRows = rawRows;
-  state.lineItems = window.Core.buildLineItems(rawRows);
+  state.allLineItems = window.Core.buildLineItems(rawRows);
   rebuildTripsFromLineItems();
   state.selectedZone = '';
   state.selectedDC = '';
@@ -841,6 +932,10 @@ function ensureChart(id, config){
   var ctx = el.getContext('2d');
   if(charts[id]) charts[id].destroy();
   if(DRILL_IDS[id]){ config.options = config.options || {}; config.options.onClick = function(e, els, ch){ if(els && els.length) drillByLabel(ch.data.labels[els[0].index]); }; config.options.onHover = function(e, els){ if(e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }; }
+  if(isNewPlan() && config.data){   // แผนใหม่: ชื่อชุดข้อมูล AB/CC -> กลุ่มทัน/กลุ่มตก
+    (config.data.datasets || []).forEach(function(d){ if(typeof d.label === 'string') d.label = planLabel(d.label); });
+    if(!DRILL_IDS[id] && Array.isArray(config.data.labels)) config.data.labels = config.data.labels.map(planLabel);
+  }
   charts[id] = new Chart(ctx, config);
   return charts[id];
 }
@@ -1368,6 +1463,7 @@ function exportProblemCustomers(){
       'สถานะหลัก': cells[5].textContent,
     });
   });
+  rows = planLabelRows(rows);
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'CustomersAffected');
@@ -1660,6 +1756,7 @@ function renderAll(){
   safeRun('renderTable', function(){ lastFilteredForExport = renderTable(tableScope); });
   safeRun('renderSharePreview', function(){ renderSharePreview(); });
   document.getElementById('filterCount').textContent = fmtInt(filtered.length) + ' เที่ยว ตรงตามตัวกรอง';
+  safeRun('renderPlanBoxes', function(){ renderPlanBoxes(filtered); });
 }
 
 // ---------- UI wiring ----------
@@ -2642,6 +2739,7 @@ function exportTable(kind){
       'สถานะ': STATUS_LABEL[t.status],
     };
   });
+  rows = planLabelRows(rows);
   var ws = XLSX.utils.json_to_sheet(rows);
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PickupTrips');
@@ -2747,6 +2845,144 @@ function handleUpload(file){
 }
 
 // ---------- init ----------
+// ===================== [ปรับ 16/11/2569] แผนเดิม/แผนใหม่: ปุ่มเลือก · 3 กรอบ · หน้าตั้งค่าแผนลูกค้า =====================
+function thDateKey(k){ if(!k) return '-'; var p = k.split('-'), M = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+p[2]) + ' ' + M[+p[1]] + ' ' + (+p[0] + 543); }
+function planScopeRows(){ return PLAN.rows.filter(function(p){ if(state.selectedDC) return p.dcCode === state.selectedDC; if(state.selectedZone) return (ZONE_LOOKUP[p.dcCode] || 'ไม่ระบุภาค') === state.selectedZone; return true; }); }
+function planAgg(trips){
+  var keys = new Set(trips.map(function(t){ return t.key; })), o = { ทัน:{ c:new Set(), b:0, i:0 }, ตก:{ c:new Set(), b:0, i:0 } };
+  state.lineItems.forEach(function(li){
+    if(!li.plan) return; var t = state.lineItemTripMap.get(li.idx); if(!t || !keys.has(t.key)) return;
+    var g = o[li.plan.group]; g.c.add(li.plan.dcCode + '|' + li.plan.code); g.b += li.dryBills + li.coldBills; g.i += li.dryItems + li.coldItems;
+  });
+  return { cust:o.ทัน.c.size + o.ตก.c.size, custT:o.ทัน.c.size, custL:o.ตก.c.size, bills:o.ทัน.b + o.ตก.b, billsT:o.ทัน.b, billsL:o.ตก.b, items:o.ทัน.i + o.ตก.i, itemsT:o.ทัน.i, itemsL:o.ตก.i };
+}
+function renderPlanBoxes(filtered){
+  var box = document.getElementById('planBoxes'), note = document.getElementById('planNote'), on = isNewPlan();
+  document.body.classList.toggle('plan-new', on);
+  document.querySelectorAll('#planSeg [data-plan]').forEach(function(b){ var a = b.dataset.plan === (on ? 'new' : 'old'); b.classList.toggle('on', a); b.setAttribute('aria-pressed', a ? 'true' : 'false'); });
+  if(box) box.hidden = !on; if(note) note.hidden = !on;
+  if(!on) return;
+  var sc = planScopeRows(), nT = sc.filter(function(p){ return p.group === 'ทัน'; }).length;
+  note.innerHTML = '📋 <b>แผนใหม่</b> (เริ่มใช้ ' + thDateKey(PLAN_START) + ') · วัดเฉพาะสินค้าแห้งของลูกค้าในแผน ' + fmtInt(sc.length) + ' ราย · <span class="product-ab">กลุ่มทัน ' + fmtInt(nT) + ' ราย ตัดตามเวลา DC</span> · <span class="product-cc">กลุ่มตก ' + fmtInt(sc.length - nT) + ' ราย ตัด 20:00</span>' + (state.dateFrom && state.dateFrom < PLAN_START ? ' · <span class="muted">ช่วงที่เลือกมีวันก่อนเริ่มแผน (คำนวณย้อนหลังเพื่อเทียบ)</span>' : '');
+  var A = planAgg(filtered || applyFilters()), pi = prevTripsForPeriod(), P = pi ? planAgg(pi.trips) : null;
+  var cards = [
+    { id:'planCust', l:'ลูกค้าในแผนที่เข้ารับ', v:fmtInt(A.cust) + ' / ' + fmtInt(sc.length) + ' ราย', a:A.custT, b:A.custL, ta:' / ' + fmtInt(nT), tb:' / ' + fmtInt(sc.length - nT), cur:A.cust, prev:P && P.cust, acc:'accent-navy' },
+    { id:'planBills', l:'จำนวนบิล (ลูกค้าในแผน)', v:fmtInt(A.bills), a:A.billsT, b:A.billsL, ta:'', tb:'', cur:A.bills, prev:P && P.bills, acc:'accent-gold' },
+    { id:'planItems', l:'จำนวนกล่อง (ลูกค้าในแผน)', v:fmtInt(A.items), a:A.itemsT, b:A.itemsL, ta:'', tb:'', cur:A.items, prev:P && P.items, acc:'accent-route' },
+  ];
+  box.innerHTML = cards.map(function(c){
+    var d = P ? fmtDelta(c.cur, c.prev, { mode:'pct', good:true }) : null;
+    return '<div class="card kpi-card kpi-mini ' + c.acc + '" id="' + c.id + '"><div class="kpi-label">' + c.l + '</div><div class="kpi-value tabnum">' + c.v + '</div>' +
+      '<div class="kpi-cmp">' + (d ? '<span class="' + (d.cls || '') + '">' + d.h + ' เทียบช่วงก่อน</span>' : '<span class="muted">ไม่มีช่วงก่อนหน้า</span>') + '</div>' +
+      '<div class="kpi-breakdown"><div class="bd-item"><span class="bd-label product-ab">กลุ่มทัน</span><span class="bd-value tabnum product-ab">' + fmtInt(c.a) + c.ta + '</span></div>' +
+      '<div class="bd-item"><span class="bd-label product-cc">กลุ่มตก</span><span class="bd-value tabnum product-cc">' + fmtInt(c.b) + c.tb + '</span></div></div></div>';
+  }).join('');
+}
+function setPlanMode(mode, quiet){
+  if(mode === 'new' && !PLAN.rows.length){ showToast('ยังไม่มีแผนลูกค้าในระบบ · ผู้ดูแลนำเข้าได้ที่ ตั้งค่า → แผนลูกค้า'); mode = 'old'; quiet = true; }
+  state.planMode = mode; try{ localStorage.setItem('pickup-plan', mode); }catch(e){}
+  rebuildTripsFromLineItems(); buildZoneOptions(); buildDCOptions(); updateHeaderMeta(); renderAll();
+  if(document.getElementById('tabProblems').style.display !== 'none') renderProblemsTab();
+  planRelabelDom(); renderPlanSettings();
+  if(!quiet) showToast(mode === 'new' ? 'แสดงผลตามแผนใหม่ (เฉพาะสินค้าแห้งของลูกค้าในแผน · แยกกลุ่มทัน/ตก Cut off)' : 'แสดงผลตามแผนเดิม');
+}
+function planTimeStr(v){
+  if(typeof v === 'number' && isFinite(v)){ var m = Math.round((v % 1) * 1440); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  var t = String(v || '').trim(), mm = t.match(/^(\d{1,2})[:.](\d{2})/); return mm ? mm[1].padStart(2, '0') + ':' + mm[2] : t;
+}
+var PLAN_HEAD = ['DC ต้นทาง','รหัสลูกค้า','ชื่อบริษัท','ตำบล/แขวง','อำเภอ/เขต','โซนลูกค้า','ประเภทลูกค้า','ประเภทรถ','ผล','เวลาเข้าคลัง'];
+// อ่านไฟล์แผน: หาแถวหัวตาราง จับคอลัมน์ตามชื่อ · โซนว่างใช้โซนแถวก่อนหน้า · รหัสซ้ำใน DC เดียวกันเก็บแถวแรก
+function parsePlanSheet(aoa){
+  var hi = aoa.findIndex(function(r){ return r && r.some(function(c){ return String(c).trim() === 'รหัสลูกค้า'; }); });
+  if(hi < 0) throw new Error('ไม่พบหัวตาราง "รหัสลูกค้า"');
+  var H = aoa[hi].map(function(c){ return String(c).trim(); }), ix = PLAN_HEAD.map(function(h){ return H.indexOf(h); });
+  if(ix[0] < 0 || ix[1] < 0 || ix[8] < 0) throw new Error('ต้องมีคอลัมน์ DC ต้นทาง, รหัสลูกค้า และ ผล');
+  var out = [], seen = {}, lastZone = '', dup = 0;
+  aoa.slice(hi + 1).forEach(function(r){
+    var v = ix.map(function(i){ return i < 0 ? '' : r[i]; });
+    if(!v[1] && v[1] !== 0) return;
+    v[1] = planNormCode(v[1]); v[9] = planTimeStr(v[9]); v[8] = planGroupOf(v[8]) + ' Cut off';
+    v = v.map(function(x){ return x === null || x === undefined ? '' : String(x).trim(); });
+    if(v[5]) lastZone = v[5]; else v[5] = lastZone;
+    var k = dcCode(v[0]) + '|' + v[1]; if(seen[k]){ dup++; return; } seen[k] = 1;
+    out.push(v);
+  });
+  return { rows:out, dup:dup };
+}
+async function savePlanRows(rows, msg){
+  if(!window.__pickupSavePlan) throw new Error('ระบบบันทึกแผนยังไม่พร้อม');
+  await window.__pickupSavePlan(rows);
+  window.__PICKUP_DATA.plan = rows; loadPlan(rows);
+  if(isNewPlan() || state.planMode === 'new') setPlanMode(PLAN.rows.length ? state.planMode : 'old', true); else renderPlanSettings();
+  if(msg) showToast(msg);
+}
+var planUi = { q:'', g:'', prefill:null };
+function renderPlanSettings(){
+  var sum = document.getElementById('sumPlan'); if(!sum) return;
+  var nT = PLAN.rows.filter(function(p){ return p.group === 'ทัน'; }).length, out = planOutside();
+  sum.textContent = PLAN.rows.length ? 'ในแผน ' + fmtInt(PLAN.rows.length) + ' ราย (ทัน ' + fmtInt(nT) + ' · ตก ' + fmtInt(PLAN.rows.length - nT) + ') · สินค้าแห้งนอกแผนรอระบุ ' + fmtInt(out.length) + ' ราย' : 'ยังไม่มีแผน · กดเพื่อนำเข้าไฟล์ Excel';
+  var tb = document.getElementById('planTableBody'); if(!tb) return;
+  var q = planUi.q.toLowerCase(), rows = PLAN.rows.map(function(p, i){ return { p:p, i:i }; }).filter(function(o){ var p = o.p; return (!planUi.g || p.group === planUi.g) && (!q || (p.code + ' ' + p.name + ' ' + p.zone + ' ' + p.dc).toLowerCase().indexOf(q) !== -1); });
+  document.getElementById('planCount').textContent = 'แสดง ' + fmtInt(rows.length) + ' จาก ' + fmtInt(PLAN.rows.length) + ' ราย';
+  tb.innerHTML = rows.map(function(o){ var p = o.p; return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td><button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
+  var ob = document.getElementById('planOutBody');
+  document.getElementById('planOutCount').textContent = 'ลูกค้าสินค้าแห้งที่ไม่อยู่ในแผน ' + fmtInt(out.length) + ' ราย · ตอนนี้ไม่นำมาคำนวณในแผนใหม่ · กด "เพิ่มเข้าแผน" เพื่อระบุกลุ่ม';
+  ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + escapeHtml(o.code) + '</td><td>' + escapeHtml(o.name) + '</td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td><button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
+  planUi.out = out;
+}
+function escapeHtml(x){ return String(x === null || x === undefined ? '' : x).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function wirePlan(){
+  var acts = document.querySelector('.acts');
+  if(acts && !document.getElementById('planSeg')){
+    var seg = document.createElement('div'); seg.className = 'plan-seg'; seg.id = 'planSeg'; seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'เลือกแผนที่ใช้วัดผล');
+    seg.innerHTML = '<button type="button" data-plan="old">แผนเดิม</button><button type="button" data-plan="new">แผนใหม่</button>';
+    acts.insertBefore(seg, acts.firstChild);
+    seg.addEventListener('click', function(e){ var b = e.target.closest('[data-plan]'); if(b && b.dataset.plan !== (isNewPlan() ? 'new' : 'old')) setPlanMode(b.dataset.plan); });
+  }
+  planObserve();
+  var el = function(id){ return document.getElementById(id); };
+  if(el('planSearch')) el('planSearch').addEventListener('input', function(e){ planUi.q = e.target.value; renderPlanSettings(); });
+  if(el('planGroupFilter')) el('planGroupFilter').addEventListener('change', function(e){ planUi.g = e.target.value; renderPlanSettings(); });
+  if(el('planImportBtn')) el('planImportBtn').addEventListener('click', function(){ el('planFile').click(); });
+  if(el('planFile')) el('planFile').addEventListener('change', async function(e){
+    var f = e.target.files[0]; e.target.value = ''; if(!f) return;
+    try{
+      var wb = XLSX.read(await f.arrayBuffer(), { type:'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:true, defval:'' });
+      var R = parsePlanSheet(aoa), nT = R.rows.filter(function(r){ return r[8].indexOf('ทัน') === 0; }).length;
+      if(!R.rows.length) throw new Error('ไม่พบรายการลูกค้า');
+      if(!confirm('นำเข้าแผนจาก ' + f.name + '\n' + R.rows.length + ' ราย (ทัน ' + nT + ' · ตก ' + (R.rows.length - nT) + ')' + (R.dup ? '\nรหัสซ้ำใน DC เดียวกัน ' + R.dup + ' แถว (เก็บแถวแรก)' : '') + '\n\nจะแทนที่แผนเดิม ' + PLAN.rows.length + ' ราย ยืนยัน?')) return;
+      await savePlanRows(R.rows, 'นำเข้าแผนแล้ว ' + R.rows.length + ' ราย');
+    }catch(err){ showToast('นำเข้าแผนไม่สำเร็จ: ' + err.message); }
+  });
+  if(el('planExportBtn')) el('planExportBtn').addEventListener('click', function(){
+    var ws = XLSX.utils.aoa_to_sheet([PLAN_HEAD].concat(planRowsOut())), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'แผนลูกค้า'); XLSX.writeFile(wb, 'แผนลูกค้า-Pickup.xlsx');
+  });
+  if(el('planAddForm')) el('planAddForm').addEventListener('submit', async function(e){
+    e.preventDefault(); var F = e.target, v = function(n){ return String(F.elements[n].value || '').trim(); };
+    var code = planNormCode(v('code')), dc = v('dc');
+    if(!dc || !code){ showToast('ใส่ DC และรหัสลูกค้า'); return; }
+    if(PLAN.map.has(dcCode(dc) + '|' + code)){ showToast('รหัส ' + code + ' มีในแผนของ DC นี้แล้ว'); return; }
+    var rows = planRowsOut().concat([[dc, code, v('name'), '', v('district'), v('zone'), v('ctype'), v('vtype'), v('group') + ' Cut off', planTimeStr(v('time'))]]);
+    try{ await savePlanRows(rows, 'เพิ่ม ' + code + ' เข้าแผนแล้ว'); F.reset(); }catch(err){ showToast('บันทึกไม่สำเร็จ: ' + err.message); }
+  });
+  document.addEventListener('click', async function(e){
+    var d = e.target.closest('[data-plan-del]'), t = e.target.closest('[data-plan-take]');
+    if(d){
+      var p = PLAN.rows[+d.dataset.planDel]; if(!p || !confirm('ลบ ' + p.code + ' ' + p.name + ' ออกจากแผน?')) return;
+      var rows = planRowsOut(); rows.splice(+d.dataset.planDel, 1);
+      try{ await savePlanRows(rows, 'ลบ ' + p.code + ' ออกจากแผนแล้ว'); }catch(err){ showToast('บันทึกไม่สำเร็จ: ' + err.message); }
+    }
+    if(t){
+      var o = planUi.out && planUi.out[+t.dataset.planTake], F = el('planAddForm'); if(!o || !F) return;
+      var dcSel = F.elements.dc, opt = Array.from(dcSel.options).find(function(x){ return dcCode(x.value) === o.dcCode; });
+      if(opt) dcSel.value = opt.value; F.elements.code.value = o.code; F.elements.name.value = o.name;
+      F.scrollIntoView({ behavior:'smooth', block:'center' }); F.elements.group.focus();
+    }
+  });
+  if(state.planMode === 'new' && !PLAN.rows.length) state.planMode = 'old';
+  if(isNewPlan()) setPlanMode('new', true); else { renderPlanBoxes(); renderPlanSettings(); }
+}
+
 function init(){
   try {
     try {
@@ -2766,6 +3002,8 @@ function init(){
     state.draftExcludedCustomers = loadedSettings.excludedCustomers.slice();
     state.draftDcCutoffs = JSON.parse(JSON.stringify(loadedSettings.dcCutoffs));
 
+    loadPlan((window.__PICKUP_DATA && window.__PICKUP_DATA.plan) || []);
+    try{ state.planMode = localStorage.getItem('pickup-plan') === 'new' ? 'new' : 'old'; }catch(pErr){ state.planMode = 'old'; }
     var raw = (window.__PICKUP_DATA && window.__PICKUP_DATA.rows) || [];
     processRawRows(raw);
     buildZoneOptions();
@@ -2782,6 +3020,7 @@ function init(){
       setTimeout(askAdmin, 0);
     })();
     wireExtra();
+    wirePlan();
     setComparePreset('yday');
     applyPeriod('month');
   } catch(err){
