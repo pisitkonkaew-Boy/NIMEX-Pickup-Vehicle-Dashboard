@@ -2894,7 +2894,8 @@ function planStats(trips){
       ['all', o.g].forEach(function(g){ var X = R[g]; X.c.n++; X.c[st]++; X.b.n += o.b; X.b[st] += o.b; X.i.n += o.i; X.i[st] += o.i; X.cuSet.add(ck); });
     });
     // เที่ยว: ยึดเวลารถ · 1 เที่ยวอยู่กลุ่มเดียวตามประเภทเที่ยว (ไม่มีเลขใบรายการ → มีลูกค้ากลุ่มทัน = ทัน ไม่งั้น ตก)
-    var tt = tripType.get(t.key) || {}, tg = tt['3'] ? 'l' : tt['5'] ? 't' : (res.t ? 't' : 'l');
+    // เข้ารับอย่างเดียวที่มีลูกค้าในแผนรายเดียวและเป็นกลุ่มตก → นับเป็นกลุ่มตก
+    var tt = tripType.get(t.key) || {}, tg = tt['3'] ? 'l' : tt['5'] ? ((m.size === 1 && !res.t) ? 'l' : 't') : (res.t ? 't' : 'l');
     var a = planPickStatus(t, tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF);
     R[tg].t.n++; R[tg].t[a]++; R.all.t.n++; R.all.t[a]++;
   });
@@ -2964,7 +2965,7 @@ function planViewHtml(trips){
   var head = '<table class="pv-t pv-gh">' + cols + '<tr><td><div class="pv-ghb" style="background:#0a2a5e;color:#fff;text-align:left;padding-left:16px">แผนใหม่<div>เทียบ 3 มุมมอง</div></div></td>' +
     PV_G.map(function(g){ return '<td colspan="3"><div class="pv-ghb" style="background:' + PV_GC[g] + ';color:' + PV_GT[g] + '">' + PV_GN[g] + '<div>' + PV_GS[g] + '</div></div></td>'; }).join('') + '</tr></table>';
   return '<div class="pv-kcs">' + kc('all') + kc('t') + kc('l') + '</div>' + head +
-    box('🚚', 'เที่ยว', 'ยึดเวลารถถึงคลัง · เที่ยวเข้ารับอย่างเดียว = กลุ่มทัน (เทียบ Cut off DC) · เที่ยวในสายกระจาย = กลุ่มตก (เทียบ 20:00) · 1 เที่ยวนับกลุ่มเดียว', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
+    box('🚚', 'เที่ยว', 'ยึดใบรายการของรถ · เข้ารับอย่างเดียว = กลุ่มทัน (เทียบ Cut off DC) ยกเว้นมีลูกค้ารายเดียวที่เป็นกลุ่มตก · ในสายกระจาย = กลุ่มตก (เทียบ 20:00) · 1 เที่ยวนับกลุ่มเดียว', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
     box('👥', 'ลูกค้า', 'Ontime / Delay / ยังไม่กลับ นับครั้งที่เข้ารับลูกค้า (ลูกค้า 1 ราย ใน 1 เที่ยว = 1 ครั้ง) · วัดกับเวลาตัดของกลุ่มลูกค้า', rTotal('ลูกค้า (ราย)', 'cu') + rates('c')) +
     box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
     box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
