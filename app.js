@@ -637,7 +637,8 @@ var CUTOFF_OVERRIDES = {}; // { dcCode: { 'แห้ง': minutes, 'เย็น
 //   1 เที่ยวอยู่กลุ่มทัน ถ้ามีลูกค้ากลุ่มทันอย่างน้อย 1 ราย · เที่ยวที่ไม่มีเวลากลับเลย = Delay
 //   ช่อง AB/CC ทุกจุดแสดงเป็น กลุ่มทัน/กลุ่มตก · ลูกค้า AB นอกแผน และสินค้า CC ไม่นับ (ดูรายชื่อที่ ตั้งค่า → แผนลูกค้า)
 var PLAN_START = '2026-11-16', PLAN_LATE_CUTOFF = 20 * 60;
-var PLAN = { rows: [], map: new Map() };
+var PLAN = { rows: [], map: new Map(), byName: new Map() };
+function planNormName(v){ return String(v || '').replace(/\s+/g, ' ').trim(); }
 function planNormCode(v){ return String(v === null || v === undefined ? '' : v).trim().replace(/\.0+$/, '').toUpperCase(); }
 function planGroupOf(v){ return String(v || '').indexOf('ทัน') !== -1 ? 'ทัน' : 'ตก'; }
 function loadPlan(rows){
@@ -645,13 +646,19 @@ function loadPlan(rows){
     return { dc:String(r[0] || '').trim(), dcCode:dcCode(r[0]), code:planNormCode(r[1]), name:String(r[2] || ''), sub:String(r[3] || ''), district:String(r[4] || ''),
       zone:String(r[5] || ''), ctype:String(r[6] || ''), vtype:String(r[7] || ''), group:planGroupOf(r[8]), time:String(r[9] || '') };
   });
-  PLAN.map = new Map(); PLAN.rows.forEach(function(p){ PLAN.map.set(p.dcCode + '|' + p.code, p); });
+  PLAN.map = new Map(); PLAN.byName = new Map();
+  PLAN.rows.forEach(function(p){ if(p.code && p.code !== '-') PLAN.map.set(p.dcCode + '|' + p.code, p); var n = planNormName(p.name); if(n && !PLAN.byName.has(p.dcCode + '|' + n)) PLAN.byName.set(p.dcCode + '|' + n, p); });
 }
 function planRowsOut(){ return PLAN.rows.map(function(p){ return [p.dc, p.code, p.name, p.sub, p.district, p.zone, p.ctype, p.vtype, p.group + ' Cut off', p.time]; }); }
 function isNewPlan(){ return state.planMode === 'new' && PLAN.rows.length > 0; }
 window.__pickupIsNewPlan = isNewPlan;
 function planIsAB(li){ return li.productType === 'แห้ง' || (!li.productType && (li.dryBills + li.dryItems) > 0); }
-function planOf(li){ return PLAN.map.get(li.dcCode + '|' + planNormCode(li.customerCode)) || null; }
+// จับคู่ด้วยรหัสลูกค้า · ถ้าบรรทัดไม่มีรหัส ใช้ DC + ชื่อลูกค้าแทน (เช่น ออฟฟิศเมท ที่บางบรรทัดไม่มีรหัส)
+function planOf(li){
+  var c = planNormCode(li.customerCode);
+  if(c) return PLAN.map.get(li.dcCode + '|' + c) || null;
+  var n = planNormName(li.customer); return n ? (PLAN.byName.get(li.dcCode + '|' + n) || null) : null;
+}
 function planLineItems(){
   var out = [];
   state.allLineItems.forEach(function(li){
@@ -673,8 +680,8 @@ function planOutside(){
   var m = new Map();
   (state.allLineItems || []).forEach(function(li){
     if(!planIsAB(li) || planOf(li) || !li.dcCode) return;
-    var k = li.dcCode + '|' + planNormCode(li.customerCode);
-    if(!m.has(k)) m.set(k, { dc:li.dc, dcCode:li.dcCode, code:planNormCode(li.customerCode), name:li.customer || '', lines:0, bills:0, items:0, first:null, last:null });
+    var code = planNormCode(li.customerCode), nm = planNormName(li.customer), k = li.dcCode + '|' + (code || 'N:' + nm);
+    if(!m.has(k)) m.set(k, { dc:li.dc, dcCode:li.dcCode, code:code, name:nm, noCode:!code, anon:!code && !nm, lines:0, bills:0, items:0, first:null, last:null });
     var o = m.get(k); o.lines++; o.bills += li.dryBills; o.items += li.dryItems;
     var d = li.dispatch && li.dispatch.dateKey; if(d){ if(!o.first || d < o.first) o.first = d; if(!o.last || d > o.last) o.last = d; }
   });
@@ -2927,7 +2934,7 @@ function renderPlanSettings(){
   tb.innerHTML = rows.map(function(o){ var p = o.p; return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td><button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
   var ob = document.getElementById('planOutBody');
   document.getElementById('planOutCount').textContent = 'ลูกค้าสินค้าแห้งที่ไม่อยู่ในแผน ' + fmtInt(out.length) + ' ราย · ตอนนี้ไม่นำมาคำนวณในแผนใหม่ · กด "เพิ่มเข้าแผน" เพื่อระบุกลุ่ม';
-  ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + escapeHtml(o.code) + '</td><td><button class="link-btn" type="button" data-plan-take="' + i + '" title="กดเพื่อเพิ่มเข้าแผน แล้วเลือกกลุ่ม/เวลา">' + escapeHtml(o.name || o.code) + '</button></td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td><button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
+  ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + (o.code ? escapeHtml(o.code) : '<span class="muted">ไม่มีรหัส</span>') + '</td><td>' + (o.anon ? '<span class="muted">ไม่มีชื่อและรหัสลูกค้า (เช่น สินค้า D2D) · จับคู่กับแผนไม่ได้</span>' : '<button class="link-btn" type="button" data-plan-take="' + i + '" title="กดเพื่อเพิ่มเข้าแผน แล้วเลือกกลุ่ม/เวลา">' + escapeHtml(o.name || o.code) + '</button>' + (o.noCode ? ' <span class="muted">(จับคู่ด้วยชื่อ)</span>' : '')) + '</td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td>' + (o.anon ? '' : '<button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button>') + '</td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
   planUi.out = out;
 }
 function escapeHtml(x){ return String(x === null || x === undefined ? '' : x).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
@@ -2959,9 +2966,11 @@ function wirePlan(){
   });
   if(el('planAddForm')) el('planAddForm').addEventListener('submit', async function(e){
     e.preventDefault(); var F = e.target, v = function(n){ return String(F.elements[n].value || '').trim(); };
-    var code = planNormCode(v('code')), dc = v('dc');
-    if(!dc || !code){ showToast('ใส่ DC และรหัสลูกค้า'); return; }
-    if(PLAN.map.has(dcCode(dc) + '|' + code)){ showToast('รหัส ' + code + ' มีในแผนของ DC นี้แล้ว'); return; }
+    var code = planNormCode(v('code')), dc = v('dc'), nm = planNormName(v('name'));
+    if(!dc || (!code && !nm)){ showToast('ใส่ DC และรหัสลูกค้า (หรือชื่อลูกค้า ถ้าไม่มีรหัส)'); return; }
+    if(!code) code = '-';   // ไม่มีรหัส: จับคู่ด้วยชื่อ
+    if(code !== '-' && PLAN.map.has(dcCode(dc) + '|' + code)){ showToast('รหัส ' + code + ' มีในแผนของ DC นี้แล้ว'); return; }
+    if(code === '-' && PLAN.byName.has(dcCode(dc) + '|' + nm)){ showToast(nm + ' มีในแผนของ DC นี้แล้ว'); return; }
     var rows = planRowsOut().concat([[dc, code, v('name'), '', v('district'), v('zone'), v('ctype'), v('vtype'), v('group') + ' Cut off', planTimeStr(v('time'))]]);
     try{ await savePlanRows(rows, 'เพิ่ม ' + code + ' เข้าแผนแล้ว'); F.reset(); }catch(err){ showToast('บันทึกไม่สำเร็จ: ' + err.message); }
   });
