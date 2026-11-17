@@ -3055,9 +3055,17 @@ function wirePlan(){
     var code = planNormCode(v('code')), dc = v('dc'), nm = planNormName(v('name'));
     if(!dc || (!code && !nm)){ showToast('ใส่ DC และรหัสลูกค้า (หรือชื่อลูกค้า ถ้าไม่มีรหัส)'); return; }
     if(!code) code = '-';   // ไม่มีรหัส: จับคู่ด้วยชื่อ
-    if(code !== '-' && PLAN.map.has(dcCode(dc) + '|' + code)){ showToast('รหัส ' + code + ' มีในแผนของ DC นี้แล้ว'); return; }
-    if(code === '-' && PLAN.byName.has(dcCode(dc) + '|' + nm)){ showToast(nm + ' มีในแผนของ DC นี้แล้ว'); return; }
-    var rows = planRowsOut().concat([[dc, code, v('name'), '', v('district'), v('zone'), v('ctype'), v('vtype'), v('group') + ' Cut off', planTimeStr(v('time'))]]);
+    // มีในแผนของ DC นี้แล้ว → อัปเดตแถวเดิม (ช่องที่เว้นว่างใช้ค่าเดิม)
+    var rows = planRowsOut(), dcc = dcCode(dc), hit = -1;
+    PLAN.rows.forEach(function(p, i){ if(hit < 0 && p.dcCode === dcc && (code !== '-' ? p.code === code : (p.code === '-' && planNormName(p.name) === nm))) hit = i; });
+    if(hit >= 0){
+      var r = rows[hit].slice(), put = function(i, x){ if(x) r[i] = x; };
+      put(2, v('name')); put(4, v('district')); put(5, v('zone')); r[6] = v('ctype'); r[7] = v('vtype'); r[8] = v('group') + ' Cut off'; put(9, planTimeStr(v('time')));
+      rows[hit] = r;
+      try{ await savePlanRows(rows, 'อัปเดต ' + (code !== '-' ? code : nm) + ' ในแผนแล้ว'); F.reset(); }catch(err){ showToast('บันทึกไม่สำเร็จ: ' + err.message); }
+      return;
+    }
+    rows = rows.concat([[dc, code, v('name'), '', v('district'), v('zone'), v('ctype'), v('vtype'), v('group') + ' Cut off', planTimeStr(v('time'))]]);
     try{ await savePlanRows(rows, 'เพิ่ม ' + code + ' เข้าแผนแล้ว'); F.reset(); }catch(err){ showToast('บันทึกไม่สำเร็จ: ' + err.message); }
   });
   document.addEventListener('click', async function(e){
