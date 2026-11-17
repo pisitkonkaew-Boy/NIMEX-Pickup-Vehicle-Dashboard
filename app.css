@@ -490,3 +490,5 @@ body.plan-new .kpi-row2 .kpi-card:has(#kpiBills),body.plan-new .kpi-row2 .kpi-ca
 .pv-z{color:var(--muted)}.pv-z2{color:#b9c9e6;font-size:12px}.pv-black{color:var(--ink);font-weight:600}
 .pv-foot{font-size:11.5px;color:var(--muted);margin:10px 2px 0}
 @media (max-width:900px){.pv-kcs{grid-template-columns:1fr}.plan-view{overflow-x:auto}.pv-t,.pv-gh{min-width:860px}}
+@media (min-width:640px){body.plan-new .kpi-row2:has(#kpiBills){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1180px){body.plan-new .kpi-row2:has(#kpiBills){grid-template-columns:repeat(4,minmax(0,1fr))}}
