@@ -494,3 +494,6 @@ body.plan-new .kpi-row2 .kpi-card:has(#kpiBills),body.plan-new .kpi-row2 .kpi-ca
 @media (min-width:1180px){body.plan-new .kpi-row2:has(#kpiBills){grid-template-columns:repeat(4,minmax(0,1fr))}}
 body.plan-new #dcSummaryCard{display:none}
 .plan-closed{margin-top:10px}.plan-closed summary{cursor:pointer;font-weight:600;color:var(--muted);padding:6px 0}
+th.psort{cursor:pointer;user-select:none;white-space:nowrap}th.psort:hover{color:var(--gold-l)}
+th.psort::after{content:attr(data-dir);font-size:10px;margin-left:4px;color:var(--gold-l)}
+th.psort:not(.on)::after{content:'⇅';opacity:.45}

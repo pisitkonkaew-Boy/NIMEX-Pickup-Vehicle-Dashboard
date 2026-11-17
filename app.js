@@ -3013,25 +3013,49 @@ async function savePlanRows(rows, msg){
   if(isNewPlan() || state.planMode === 'new') setPlanMode(PLAN.rows.length ? state.planMode : 'old', true); else renderPlanSettings();
   if(msg) showToast(msg);
 }
-var planUi = { q:'', g:'', prefill:null };
+var planUi = { q:'', g:'', prefill:null, sort:{} };
+// เรียงตารางในหน้าแผน: กดหัวตาราง (กดซ้ำ = กลับทิศ) · ตัวเลขเริ่มจากมากไปน้อย ข้อความเริ่ม ก→ฮ
+function planSortRows(tbl, arr, get){
+  var S = planUi.sort[tbl]; if(!S) return arr;
+  return arr.slice().sort(function(a, b){
+    var x = get(a, S.c), y = get(b, S.c), r;
+    if(typeof x === 'number' && typeof y === 'number') r = x - y; else r = String(x === null || x === undefined ? '' : x).localeCompare(String(y === null || y === undefined ? '' : y), 'th', { numeric:true });
+    return S.d * r;
+  });
+}
+function planSortMarks(){
+  document.querySelectorAll('th.psort').forEach(function(th){
+    var k = th.dataset.psort.split(':'), S = planUi.sort[k[0]], on = S && S.c === k[1];
+    th.classList.toggle('on', !!on); th.setAttribute('data-dir', on ? (S.d > 0 ? '▲' : '▼') : '');
+  });
+}
+document.addEventListener('click', function(e){
+  var th = e.target.closest('th.psort'); if(!th) return;
+  var k = th.dataset.psort.split(':'), S = planUi.sort[k[0]], num = ['lines','bills','items','last','at'].indexOf(k[1]) !== -1;
+  planUi.sort[k[0]] = (S && S.c === k[1]) ? { c:k[1], d:-S.d } : { c:k[1], d: num ? -1 : 1 };
+  renderPlanSettings();
+});
 function renderPlanSettings(){
   var sum = document.getElementById('sumPlan'); if(!sum) return;
   var nT = PLAN.rows.filter(function(p){ return p.group === 'ทัน'; }).length, out = planOutside();
   sum.textContent = PLAN.rows.length ? 'ในแผน ' + fmtInt(PLAN.rows.length) + ' ราย (ทัน ' + fmtInt(nT) + ' · ตก ' + fmtInt(PLAN.rows.length - nT) + ') · สินค้าแห้งนอกแผนรอระบุ ' + fmtInt(out.length) + ' ราย' : 'ยังไม่มีแผน · กดเพื่อนำเข้าไฟล์ Excel';
   var tb = document.getElementById('planTableBody'); if(!tb) return;
   var q = planUi.q.toLowerCase(), rows = PLAN.rows.map(function(p, i){ return { p:p, i:i }; }).filter(function(o){ var p = o.p; return (!planUi.g || p.group === planUi.g) && (!q || (p.code + ' ' + p.name + ' ' + p.zone + ' ' + p.dc).toLowerCase().indexOf(q) !== -1); });
+  rows = planSortRows('plan', rows, function(o, c){ return c === 'dc' ? o.p.dcCode : o.p[c]; });
   document.getElementById('planCount').textContent = 'แสดง ' + fmtInt(rows.length) + ' จาก ' + fmtInt(PLAN.rows.length) + ' ราย';
   tb.innerHTML = rows.map(function(o){ var p = o.p; return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td><button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
   var ob = document.getElementById('planOutBody'), closed = planClosedMap();
   out = out.filter(function(o){ return !closed[planOutKey(o)]; });
+  out = planSortRows('out', out, function(o, c){ return c === 'dc' ? o.dcCode : c === 'last' ? (o.last || '') : o[c]; });
   document.getElementById('planOutCount').textContent = 'ลูกค้าสินค้าแห้งที่ไม่อยู่ในแผน ' + fmtInt(out.length) + ' ราย · ตอนนี้ไม่นำมาคำนวณในแผนใหม่ · กด "เพิ่มเข้าแผน" เพื่อระบุกลุ่ม หรือ "ปิดทำการ" ถ้าสาขาปิดแล้ว';
   var ck = Object.keys(closed), cbox = document.getElementById('planClosedBox');
   if(cbox){
     cbox.hidden = !ck.length; document.getElementById('planClosedSum').textContent = '🚫 ปิดทำการแล้ว ' + fmtInt(ck.length) + ' ราย (ไม่แสดงในรายการรอระบุ · กดเพื่อดู/เปิดกลับ)';
+    ck = planSortRows('closed', ck, function(k, c){ var x = closed[k] || {}; return c === 'dc' ? k.split('|')[0] : (x[c] || ''); });
     document.getElementById('planClosedBody').innerHTML = ck.map(function(k){ var c = closed[k] || {}; return '<tr><td>' + escapeHtml(dcShortLabel(c.dc) || c.dc || k.split('|')[0]) + '</td><td class="mono">' + escapeHtml(c.code || '') + '</td><td>' + escapeHtml(c.name || '') + '</td><td>' + (c.at ? thDateKey(c.at) : '') + '</td><td><button class="btn-ghost sm" type="button" data-plan-reopen="' + escapeHtml(k) + '">เปิดกลับ</button></td></tr>'; }).join('');
   }
   ob.innerHTML = out.slice(0, 300).map(function(o, i){ return '<tr><td>' + escapeHtml(dcShortLabel(o.dc) || o.dc) + '</td><td class="mono">' + (o.code ? escapeHtml(o.code) : '<span class="muted">ไม่มีรหัส</span>') + '</td><td>' + (o.anon ? '<span class="muted">ไม่มีชื่อและรหัสลูกค้า (เช่น สินค้า D2D) · จับคู่กับแผนไม่ได้</span>' : '<button class="link-btn" type="button" data-plan-take="' + i + '" title="กดเพื่อเพิ่มเข้าแผน แล้วเลือกกลุ่ม/เวลา">' + escapeHtml(o.name || o.code) + '</button>' + (o.noCode ? ' <span class="muted">(จับคู่ด้วยชื่อ)</span>' : '')) + '</td><td class="tabnum">' + fmtInt(o.lines) + '</td><td class="tabnum">' + fmtInt(o.bills) + '</td><td class="tabnum">' + fmtInt(o.items) + '</td><td>' + thDateKey(o.first) + ' – ' + thDateKey(o.last) + '</td><td>' + (o.anon ? '' : '<button class="btn-ghost sm" type="button" data-plan-take="' + i + '">เพิ่มเข้าแผน</button> <button class="btn-ghost sm" type="button" data-plan-close="' + i + '" title="สาขานี้ปิดทำการแล้ว · ซ่อนจากรายการรอระบุ">ปิดทำการ</button>') + '</td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีลูกค้าสินค้าแห้งนอกแผน</td></tr>';
-  planUi.out = out;
+  planUi.out = out; planSortMarks();
 }
 function escapeHtml(x){ return String(x === null || x === undefined ? '' : x).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
 function wirePlan(){
