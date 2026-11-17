@@ -493,3 +493,4 @@ body.plan-new .kpi-row2 .kpi-card:has(#kpiBills),body.plan-new .kpi-row2 .kpi-ca
 @media (min-width:640px){body.plan-new .kpi-row2:has(#kpiBills){grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (min-width:1180px){body.plan-new .kpi-row2:has(#kpiBills){grid-template-columns:repeat(4,minmax(0,1fr))}}
 body.plan-new #dcSummaryCard{display:none}
+.plan-closed{margin-top:10px}.plan-closed summary{cursor:pointer;font-weight:600;color:var(--muted);padding:6px 0}
