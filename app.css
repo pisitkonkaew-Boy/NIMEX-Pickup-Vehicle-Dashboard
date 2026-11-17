@@ -497,3 +497,11 @@ body.plan-new #dcSummaryCard{display:none}
 th.psort{cursor:pointer;user-select:none;white-space:nowrap}th.psort:hover{color:var(--gold-l)}
 th.psort::after{content:attr(data-dir);font-size:10px;margin-left:4px;color:var(--gold-l)}
 th.psort:not(.on)::after{content:'⇅';opacity:.45}
+td.nowrap{white-space:nowrap}
+tr.plan-edit td{background:var(--panel2,rgba(212,175,55,.08));border-left:3px solid var(--gold-l)}
+.plan-edit-form{margin:4px 0;align-items:flex-end}
+.plan-edit-form label{display:flex;flex-direction:column;gap:2px;flex:1 1 140px;min-width:0}
+.plan-edit-form label span{font-size:11px;color:var(--muted)}
+.plan-edit-form label input,.plan-edit-form label select{flex:none;width:100%}
+.plan-edit-form .pe-acts{display:flex;gap:6px;flex:0 0 auto}
+.plan-edit-form label{max-width:240px}.plan-edit-form label:has(input[name=name]){flex:2 1 260px;max-width:420px}

@@ -3015,6 +3015,39 @@ async function savePlanRows(rows, msg){
 }
 var planUi = { q:'', g:'', prefill:null, sort:{} };
 // เรียงตารางในหน้าแผน: กดหัวตาราง (กดซ้ำ = กลับทิศ) · ตัวเลขเริ่มจากมากไปน้อย ข้อความเริ่ม ก→ฮ
+// แก้ไขแถวในแผน (ทุกช่อง) — แสดงเป็นแถวฟอร์มแทนแถวเดิม
+function planEditRow(p, i){
+  var opt = function(list, v){ return list.map(function(x){ return '<option value="' + escapeHtml(x[0]) + '"' + (x[0] === v ? ' selected' : '') + '>' + escapeHtml(x[1]) + '</option>'; }).join(''); };
+  var dcs = Array.from(document.querySelectorAll('#planAddForm select[name=dc] option')).filter(function(o){ return o.value; }).map(function(o){ return [o.value, o.textContent]; });
+  if(!dcs.some(function(d){ return d[0] === p.dc; })) dcs.unshift([p.dc, p.dc]);
+  var ct = ['CD','DP','VIP','SHOP','DC']; if(p.ctype && ct.indexOf(p.ctype) === -1) ct.unshift(p.ctype);
+  var vt = ['เข้ารับอย่างเดียว','ในสายกระจาย']; if(p.vtype && vt.indexOf(p.vtype) === -1) vt.unshift(p.vtype);
+  var two = function(x){ return [x, x]; }, inp = function(n, v, ph){ return '<label><span>' + ph + '</span><input name="' + n + '" value="' + escapeHtml(v) + '"></label>'; };
+  return '<tr class="plan-edit"><td colspan="8"><form class="plan-form plan-edit-form" data-plan-save="' + i + '" autocomplete="off">' +
+    '<label><span>DC</span><select name="dc">' + opt(dcs, p.dc) + '</select></label>' +
+    inp('code', p.code, 'รหัสลูกค้า (- = ไม่มี)') + inp('name', p.name, 'ชื่อบริษัท') + inp('sub', p.sub, 'ตำบล/แขวง') + inp('district', p.district, 'อำเภอ/เขต') + inp('zone', p.zone, 'โซนลูกค้า') +
+    '<label><span>ประเภทลูกค้า</span><select name="ctype">' + opt(ct.map(two), p.ctype) + '</select></label>' +
+    '<label><span>ประเภทรถ</span><select name="vtype">' + opt(vt.map(two), p.vtype) + '</select></label>' +
+    '<label><span>กลุ่ม</span><select name="group">' + opt([['ทัน','ทัน Cut off'],['ตก','ตก Cut off']], p.group) + '</select></label>' +
+    inp('time', p.time, 'เวลาเข้าคลัง') +
+    '<div class="pe-acts"><button class="btn-primary sm" type="submit">บันทึก</button> <button class="btn-ghost sm" type="button" data-plan-cancel="1">ยกเลิก</button></div>' +
+    '</form></td></tr>';
+}
+document.addEventListener('click', function(e){
+  var ed = e.target.closest('[data-plan-edit]'), cc = e.target.closest('[data-plan-cancel]');
+  if(ed){ planUi.edit = +ed.dataset.planEdit; renderPlanSettings(); var f = document.querySelector('.plan-edit-form'); if(f){ f.scrollIntoView({ block:'nearest' }); f.elements.name.focus(); } }
+  if(cc){ planUi.edit = null; renderPlanSettings(); }
+});
+document.addEventListener('submit', async function(e){
+  var F = e.target; if(!F.matches || !F.matches('.plan-edit-form')) return; e.preventDefault();
+  var i = +F.dataset.planSave, v = function(n){ return String(F.elements[n].value || '').trim(); };
+  var dc = v('dc'), code = planNormCode(v('code')) || '-', nm = planNormName(v('name')), dcc = dcCode(dc);
+  if(!dc || (code === '-' && !nm)){ showToast('ใส่ DC และรหัสลูกค้า (หรือชื่อลูกค้า ถ้าไม่มีรหัส)'); return; }
+  var dup = PLAN.rows.some(function(p, j){ return j !== i && p.dcCode === dcc && (code !== '-' ? p.code === code : (p.code === '-' && planNormName(p.name) === nm)); });
+  if(dup){ showToast((code !== '-' ? 'รหัส ' + code : nm) + ' มีในแผนของ DC นี้อยู่แล้ว (แถวอื่น)'); return; }
+  var rows = planRowsOut(); rows[i] = [dc, code, v('name'), v('sub'), v('district'), v('zone'), v('ctype'), v('vtype'), v('group') + ' Cut off', planTimeStr(v('time'))];
+  try{ planUi.edit = null; await savePlanRows(rows, 'แก้ไข ' + (code !== '-' ? code : nm) + ' แล้ว'); }catch(err){ planUi.edit = i; showToast('บันทึกไม่สำเร็จ: ' + err.message); renderPlanSettings(); }
+});
 function planSortRows(tbl, arr, get){
   var S = planUi.sort[tbl]; if(!S) return arr;
   return arr.slice().sort(function(a, b){
@@ -3043,7 +3076,7 @@ function renderPlanSettings(){
   var q = planUi.q.toLowerCase(), rows = PLAN.rows.map(function(p, i){ return { p:p, i:i }; }).filter(function(o){ var p = o.p; return (!planUi.g || p.group === planUi.g) && (!q || (p.code + ' ' + p.name + ' ' + p.zone + ' ' + p.dc).toLowerCase().indexOf(q) !== -1); });
   rows = planSortRows('plan', rows, function(o, c){ return c === 'dc' ? o.p.dcCode : o.p[c]; });
   document.getElementById('planCount').textContent = 'แสดง ' + fmtInt(rows.length) + ' จาก ' + fmtInt(PLAN.rows.length) + ' ราย';
-  tb.innerHTML = rows.map(function(o){ var p = o.p; return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td><button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
+  tb.innerHTML = rows.map(function(o){ var p = o.p; if(planUi.edit === o.i) return planEditRow(p, o.i); return '<tr><td>' + escapeHtml(dcShortLabel(p.dc) || p.dc) + '</td><td class="mono">' + escapeHtml(p.code) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.zone) + '</td><td>' + escapeHtml(p.vtype) + '</td><td><span class="product-tag tag-' + (p.group === 'ทัน' ? 'ab' : 'cc') + '">' + p.group + ' Cut off</span></td><td class="tabnum">' + escapeHtml(p.time) + '</td><td class="nowrap"><button class="btn-ghost sm" type="button" data-plan-edit="' + o.i + '">แก้ไข</button> <button class="btn-ghost sm" type="button" data-plan-del="' + o.i + '">ลบ</button></td></tr>'; }).join('') || '<tr><td colspan="8" class="muted">ไม่มีรายการ</td></tr>';
   var ob = document.getElementById('planOutBody'), closed = planClosedMap();
   out = out.filter(function(o){ return !closed[planOutKey(o)]; });
   out = planSortRows('out', out, function(o, c){ return c === 'dc' ? o.dcCode : c === 'last' ? (o.last || '') : o[c]; });
