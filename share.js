@@ -115,8 +115,8 @@ function kpiData(){
   ];
   return { cur:cur, prev:prev, main:main, stats:stats, total:cur.total, totalD: prev && D(cur.total, prev.total, 'pct', true) };
 }
-function trendData(kind){
-  var B = groupByBucket(chartWindowTrips(), effectiveGranularity());
+function trendData(kind, own){
+  var B = own ? groupByBucket(applyFilters(), state.granularity) : groupByBucket(chartWindowTrips(), effectiveGranularity());
   var ser = function(prod){ return B.map(function(b){ var g = b.trips.filter(function(t){ return t.dominantProduct === prod; });
     if(kind === 'delay'){ g = g.filter(function(t){ return t.status === 'delay' && t.delayMinutes !== null; }); return g.length ? g.reduce(function(s,t){ return s + t.delayMinutes; }, 0) / g.length : NaN; }
     return g.length ? g.filter(function(t){ return t.status === 'ontime'; }).length / g.length * 100 : NaN; }); };
@@ -596,7 +596,7 @@ function summaryText(){
     K.stats.forEach(function(t, i){ L.push(SE[i] + ' ' + t.l + ': ' + t.v + (t.d ? ' ' + t.d.txt + mark(t.d) : '')); });
   }
   if(picked.has('trend') || picked.has('delay')){
-    var T = trendData('trend'), n = T.labels.length;
+    var T = trendData('trend', true), n = T.labels.length;   // ข้อความ: ค่าของช่วงที่เลือกทั้งช่วง (เหมือนเดิม)
     if(n){ sec('📈 แนวโน้ม Ontime % ช่วงล่าสุด (' + T.labels[n - 1] + ')'); L.push('📦 AB ' + (isFinite(T.ab[n-1]) ? T.ab[n-1].toFixed(1) + '%' : '-') + ' · ❄️ CC ' + (isFinite(T.cc[n-1]) ? T.cc[n-1].toFixed(1) + '%' : '-')); }
   }
   if(picked.has('dc')){

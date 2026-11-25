@@ -33,6 +33,7 @@
       seg.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.v===sel.value))});
     });
   }
+  window.__nimexSyncSegs = syncSegs;
   function currentTab(){var a=document.querySelector('.rail .main-tab.active');return a?a.dataset.tab:'tabDashboard'}
   function syncTabs(){
     var t=currentTab();
@@ -577,7 +578,7 @@ function groupByBucket(trips, granularity){
 }
 
 function effectiveGranularity(){
-  return state.granularity; // [ปรับ 08/11/2569] กราฟแสดงช่วงก่อนหน้าด้วย จึงไม่สลับเป็นรายชั่วโมง
+  return 'day'; // [ปรับ 25/11/2569] กราฟแนวโน้มแสดงรายวันเสมอ (สัปดาห์/เดือน = วันในช่วงที่เลือก)
 }
 
 // ---------- data loading ----------
@@ -1999,7 +2000,7 @@ function applyPeriod(gran, anchorKey){
   state.granularity = gran;
   state.dateFrom = r.from; state.dateTo = r.to;
   state.page = 1;
-  syncDateInputs();
+  syncDateInputs(); if(window.__nimexSyncSegs) window.__nimexSyncSegs();
   renderAll();
   if(document.getElementById('tabProblems').style.display !== 'none') renderProblemsTab();
 }
@@ -2009,13 +2010,14 @@ window.__nimexPeriod = function(g){ applyPeriod(g); };
 function chartWindowTrips(){
   var to = state.dateTo; if(!to) return applyFilters();
   var T = parseDateKeyLocal(to), from;
-  if(state.granularity === 'day') from = addDays(T, -20);                    // ~ 3 สัปดาห์ล่าสุด
-  else if(state.granularity === 'week') from = addDays(mondayOf(T), -7*7);   // 8 สัปดาห์ล่าสุด
-  else from = new Date(T.getFullYear(), T.getMonth()-11, 1);                 // 12 เดือนล่าสุด
+  // [ปรับ 25/11/2569] เลือกวัน = รายวันย้อนหลัง ~3 สัปดาห์ · เลือกสัปดาห์/เดือน = รายวันภายในช่วงที่เลือก
+  if(state.granularity !== 'day') return tripsInRange(state.dateFrom, to);
+  from = addDays(T, -20);
   return tripsInRange(toDateKey(from), to);
 }
 function chartDrill(bucket){
   if(!bucket || !bucket.key) return;
+  if(bucket.key.length === 10){ applyPeriod('day', bucket.key); return; }   // จุดรายวัน → เปิดวันนั้น
   var k = bucket.key.length === 7 ? bucket.key + '-01' : bucket.key;
   applyPeriod(state.granularity, state.granularity === 'month' ? toDateKey(new Date(+k.slice(0,4), +k.slice(5,7), 0)) : (state.granularity === 'week' ? toDateKey(addDays(parseDateKeyLocal(k), 6)) : k));
 }
