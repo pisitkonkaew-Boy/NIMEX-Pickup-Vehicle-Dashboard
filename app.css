@@ -505,3 +505,10 @@ tr.plan-edit td{background:var(--panel2,rgba(212,175,55,.08));border-left:3px so
 .plan-edit-form label input,.plan-edit-form label select{flex:none;width:100%}
 .plan-edit-form .pe-acts{display:flex;gap:6px;flex:0 0 auto}
 .plan-edit-form label{max-width:240px}.plan-edit-form label:has(input[name=name]){flex:2 1 260px;max-width:420px}
+.info-opts{margin:10px 0 4px;border:1px dashed var(--line2);border-radius:12px;padding:4px 12px 10px}
+.info-seg{display:flex;gap:6px;flex-wrap:wrap}
+.info-seg label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer}
+.info-seg label.on{background:var(--navy2,#0a2a5e);color:#fff;border-color:transparent}
+.info-seg input{accent-color:#d4af37}
+.info-opts label.dis{opacity:.45;cursor:not-allowed}
+.info-note{font-size:12px;color:var(--muted);margin:6px 0 0}

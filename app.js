@@ -2407,7 +2407,7 @@ function wireAnalysis(){
 // [ปรับ 14/11/2569] โค้ดแชร์/ส่งออกย้ายไปไฟล์ share.js (โหลดก่อน app.js) — ส่งฟังก์ชันคำนวณเดิมให้ใช้ตรงๆ ไม่คำนวณซ้ำ
 function wireShare(){
   if(!window.PickupShare){ console.error("[share] share.js not loaded"); return; }
-  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan });
+  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows });
 }
 
 function wireEvents(){
@@ -2975,6 +2975,15 @@ function planViewHtml(trips){
     box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
     '<p class="pv-foot pv-admin">🔒 เทียบช่วงก่อน: จำนวน = % เปลี่ยนแปลง · อัตรา = จุด · <span class="pv-g">น้ำเงิน = ดีขึ้น</span> · <span class="pv-b">แดง = แย่ลง</span> · "ยังไม่กลับ" เป็นรถของวันนี้ที่ยังไม่ถึงคลัง' + (dcSel ? '' : ' · รายชื่อ DC ในกรอบบนเรียงจาก % ดีที่สุด') + '</p>';
 }
+// คำนวณชั่วคราวในอีกแผน (ใช้ตอนส่งออกอินโฟกราฟิก) แล้วคืนสภาพเดิม · หน้าเว็บไม่ถูกวาดใหม่
+function withPlanMode(mode, fn){
+  if(mode === 'new' && !PLAN.rows.length) mode = 'old';
+  var cur = state.planMode, curNew = isNewPlan();
+  if((mode === 'new') === curNew) return fn();
+  state.planMode = mode; rebuildTripsFromLineItems();
+  try{ return fn(); } finally { state.planMode = cur; rebuildTripsFromLineItems(); }
+}
+function hasPlanRows(){ return PLAN.rows.length > 0; }
 function setPlanMode(mode, quiet){
   if(mode === 'new' && !PLAN.rows.length){ showToast('ยังไม่มีแผนลูกค้าในระบบ · ผู้ดูแลนำเข้าได้ที่ ตั้งค่า → แผนลูกค้า'); mode = 'old'; quiet = true; }
   state.planMode = mode; try{ localStorage.setItem('pickup-plan', mode); }catch(e){}
