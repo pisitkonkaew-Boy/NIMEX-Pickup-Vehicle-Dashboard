@@ -1848,6 +1848,7 @@ function renderAll(){
   safeRun('renderSharePreview', function(){ renderSharePreview(); });
   document.getElementById('filterCount').textContent = fmtInt(filtered.length) + ' เที่ยว ตรงตามตัวกรอง';
   safeRun('renderPlanBoxes', function(){ renderPlanBoxes(filtered); });
+  safeRun('renderPlanCC', function(){ var tc = document.getElementById('tabPlanCC'); if(tc && tc.style.display !== 'none' && window.__pickupCCRender) window.__pickupCCRender(); });
   safeRun('renderPlan3', function(){ var tp = document.getElementById('tabPlan3'); if(tp && tp.style.display !== 'none' && window.__pickupP3Render) window.__pickupP3Render(); });
 }
 
@@ -2493,7 +2494,8 @@ function wireShare(){
 }
 
 document.addEventListener('click', function(e){ var b = e.target.closest('[data-p3x]'); if(b && window.__pickupP3Export) window.__pickupP3Export(b.dataset.p3x); });
-var __p3rs = null; window.addEventListener('resize', function(){ clearTimeout(__p3rs); __p3rs = setTimeout(function(){ var tp = document.getElementById('tabPlan3'); if(tp && tp.style.display !== 'none' && window.__pickupP3Render) window.__pickupP3Render(); }, 250); });
+document.addEventListener('click', function(e){ var b = e.target.closest('[data-ccx]'); if(b && window.__pickupCCExport) window.__pickupCCExport(b.dataset.ccx); });
+var __p3rs = null; window.addEventListener('resize', function(){ clearTimeout(__p3rs); __p3rs = setTimeout(function(){ var tp = document.getElementById('tabPlan3'); if(tp && tp.style.display !== 'none' && window.__pickupP3Render) window.__pickupP3Render(); var tc = document.getElementById('tabPlanCC'); if(tc && tc.style.display !== 'none' && window.__pickupCCRender) window.__pickupCCRender(); }, 250); });
 function wireEvents(){
   document.querySelectorAll('.main-tab').forEach(function(tab){
     tab.addEventListener('click', function(){
@@ -2506,6 +2508,8 @@ function wireEvents(){
       document.getElementById('tabTrips').style.display = (target==='tabTrips') ? '' : 'none';
       document.getElementById('tabAnalysis').style.display = (target==='tabAnalysis') ? '' : 'none';
       document.getElementById('tabPlan3').style.display = (target==='tabPlan3') ? '' : 'none';
+      document.getElementById('tabPlanCC').style.display = (target==='tabPlanCC') ? '' : 'none';
+      if(target === 'tabPlanCC' && window.__pickupCCRender) window.__pickupCCRender();
       if(target === 'tabPlan3' && window.__pickupP3Render) window.__pickupP3Render();
       if(target === 'tabAnalysis') renderAnalysis();
       if(target === 'tabCompare') renderCompareTab();
