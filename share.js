@@ -997,23 +997,65 @@ function p3ListHeadRow(x0, y, w){
     p3T(nx[0], y + 26, 'บิล', 15, '#f0d57a', 700, 'end') + p3T(nx[1], y + 26, 'กล่อง', 15, '#f0d57a', 700, 'end') + p3T(nx[2], y + 26, 'บาท', 15, '#f0d57a', 700, 'end');
 }
 function p3ItemsH(L){ return L.reduce(function(a, it){ return a + it.h + (it.last ? 6 : 0); }, 0); }
+// คันสุดท้ายเข้าคลัง: วันเดียว = เวลาของวันนั้น · หลายวัน = ค่าเฉลี่ยของเวลาคันสุดท้ายแต่ละวัน + วันที่ช้าที่สุด
+function p3LastIn(o){
+  var byDay = {};
+  o.s.trips.forEach(function(x){ var t = x.t; if(!t.arriveDC || t.arriveSynthetic) return; var m = t.arriveDC.timeOfDayMin + (t.arriveDC.dateKey > t.dateKey ? 1440 : 0); if(byDay[t.dateKey] === undefined || m > byDay[t.dateKey]) byDay[t.dateKey] = m; });
+  var ks = Object.keys(byDay).sort(); if(!ks.length) return null;
+  var mx = ks.reduce(function(a, k){ return byDay[k] > byDay[a] ? k : a; }, ks[0]), avg = Math.round(ks.reduce(function(a, k){ return a + byDay[k]; }, 0) / ks.length);
+  var hm = function(m){ return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0') + (m >= 1440 ? ' (+1 วัน)' : ''); };
+  return ks.length === 1 ? { big:hm(byDay[ks[0]]), sub:'คันสุดท้ายเข้าคลัง' } : { big:hm(avg), sub:'คันสุดท้ายเฉลี่ย · ช้าสุด ' + hm(byDay[mx]) + ' (' + (+mx.slice(8)) + '/' + (+mx.slice(5, 7)) + ')' };
+}
+function p3DelaySum(o){
+  var L = o.s.trips.filter(function(x){ return x.st === 'de'; }), sum = function(k){ return L.reduce(function(a, x){ return a + x.cus.reduce(function(q, c){ return q + c[k]; }, 0); }, 0); };
+  return { n:L.length, tot:o.s.all.t.n, b:sum('b'), i:sum('i'), rev:sum('rev'), last:p3LastIn(o) };
+}
+function p3DelayTop(M, x0, y0, w){
+  var b = '', S = p3DelaySum(M.bkk), bh = 150;
+  // BKK
+  b += '<rect x="' + x0 + '" y="' + y0 + '" width="' + w + '" height="' + bh + '" rx="18" fill="url(#p3bkk)"/><rect x="' + (x0 + 20) + '" y="' + y0 + '" width="' + (w - 40) + '" height="4" fill="#d4af37"/>';
+  b += '<rect x="' + (x0 + 20) + '" y="' + (y0 + 20) + '" width="56" height="28" rx="14" fill="#d4af37"/>' + p3T(x0 + 48, y0 + 39, 'BKK', 14, '#0a2a5e', 700, 'middle') + p3T(x0 + 88, y0 + 43, 'ภาพรวม BKK · เที่ยวล่าช้า', 22, '#fff', 700);
+  b += '<text x="' + (x0 + 20) + '" y="' + (y0 + 118) + '"><tspan font-size="60" font-weight="700" fill="#ff9b8f">' + fmtInt(S.n) + '</tspan><tspan dx="8" font-size="20" font-weight="600" fill="#fff">เที่ยว</tspan></text>' + p3T(x0 + 24, y0 + 140, 'จาก ' + fmtInt(S.tot) + ' เที่ยว (' + (S.tot ? (S.n / S.tot * 100).toFixed(2) : '0.00') + '%)', 14, '#c9d6ee');
+  var cx = x0 + 330, cw = (w - 330 - 20) / 4;
+  [['บิล', fmtInt(S.b)], ['กล่อง', fmtInt(S.i)], ['บาท', '฿' + fmtInt(Math.round(S.rev))], [S.last ? S.last.sub.split(' · ')[0] : 'คันสุดท้ายเข้าคลัง', S.last ? S.last.big : '–']].forEach(function(c, i){
+    var xx = cx + i * cw; b += '<line x1="' + xx + '" x2="' + xx + '" y1="' + (y0 + 66) + '" y2="' + (y0 + 136) + '" stroke="rgba(255,255,255,.2)"/>' + p3T(xx + 16, y0 + 86, esc(c[0]), 14, '#c9d6ee') + p3T(xx + 16, y0 + 126, esc(c[1]), i === 3 ? 34 : 30, i === 3 ? '#f0d57a' : '#fff', 700);
+  });
+  if(S.last && S.last.sub.indexOf('ช้าสุด') !== -1) b += p3T(x0 + w - 20, y0 + 40, esc(S.last.sub.split(' · ')[1]), 13, '#c9d6ee', 400, 'end');
+  // ราย DC
+  var y = y0 + bh + 14, n = Math.max(1, M.dcs.length), g = 14, dw = (w - g * (n - 1)) / n, dh = 200;
+  M.dcs.forEach(function(d, i){
+    var D = p3DelaySum(d), xx = x0 + i * (dw + g);
+    b += '<rect x="' + xx + '" y="' + y + '" width="' + dw + '" height="' + dh + '" rx="16" fill="#fff" stroke="#dbe3f0"/><path d="M' + xx + ' ' + (y + 16) + 'a16 16 0 0 1 16 -16h' + (dw - 32) + 'a16 16 0 0 1 16 16v-8h-' + dw + 'z" fill="' + d.col + '"/>';
+    b += p3T(xx + 18, y + 40, esc(d.name), 20, '#0b1f3f', 700) + p3T(xx + dw - 16, y + 38, 'DC ' + d.code, 12, '#55657f', 400, 'end');
+    b += '<text x="' + (xx + 18) + '" y="' + (y + 98) + '"><tspan font-size="48" font-weight="700" fill="' + P3B + '">' + fmtInt(D.n) + '</tspan><tspan dx="8" font-size="15" font-weight="600" fill="#55657f">เที่ยวล่าช้า</tspan></text>';
+    b += p3T(xx + dw - 16, y + 66, esc(D.last ? D.last.sub.split(' · ')[0] : 'คันสุดท้ายเข้าคลัง'), 12, '#55657f', 400, 'end') + p3T(xx + dw - 16, y + 100, D.last ? esc(D.last.big.replace(' (+1 วัน)', '+1')) : '–', 30, d.col, 700, 'end');
+    if(D.last && D.last.sub.indexOf('ช้าสุด') !== -1) b += p3T(xx + dw - 16, y + 120, esc(D.last.sub.split(' · ')[1]), 11, '#55657f', 400, 'end');
+    b += '<line x1="' + (xx + 18) + '" x2="' + (xx + dw - 18) + '" y1="' + (y + 134) + '" y2="' + (y + 134) + '" stroke="#e3e9f3"/>';
+    [['บิล', fmtInt(D.b)], ['กล่อง', fmtInt(D.i)], ['บาท', '฿' + fmtInt(Math.round(D.rev))]].forEach(function(c, j){ var cx2 = xx + 18 + j * (dw - 36) / 3; b += p3T(cx2, y + 158, c[0], 12, '#55657f') + p3T(cx2, y + 184, c[1], 18, '#0b1f3f', 700); });
+  });
+  return { b:b, y:y + dh + 16 };
+}
 function p3DelaySet(){
-  // [ปรับ 26/11/2569] แยกภาพ: สรุปผล (ปุ่มอินโฟแบบยาว) กับ สรุปเที่ยวล่าช้า (ปุ่มนี้) · ยาวเกินแบ่งหลายภาพ
-  var M = p3Model(), items = p3DelayItems(M), W = 1240, m = 30, MAXH = 6400, out = [];
-  if(!items.length) return [];
-  var chunks = [], cur = [], h = 0, cap = MAXH - 112 - 70 - 60;
-  items.forEach(function(it){ var ih = it.h + (it.last ? 6 : 0); if(h + ih > cap && cur.length){ chunks.push(cur); cur = []; h = 0; } cur.push(it); h += ih; });
-  if(cur.length) chunks.push(cur);
+  // [ปรับ 26/11/2569] แยกภาพ: สรุปผล (ปุ่มอินโฟแบบยาว) กับ สรุปเที่ยวล่าช้า (ปุ่มนี้) · ภาพแรกมีสรุป BKK + ราย DC (คันสุดท้ายเข้าคลัง) · ยาวเกินแบ่งหลายภาพ
+  var M = p3Model(), items = p3DelayItems(M), W = 1240, m = 30, MAXH = 6400, out = [], top0 = 112 + 4;
+  var head = function(k, n){ return p3Head(W, M, 'แผนใหม่ · สรุปเที่ยวล่าช้า', 'ภาพรวม BKK · ราย DC · รายเที่ยว ลูกค้า บิล กล่อง บาท'); };
+  var T = p3DelayTop(M, m, top0, W - 2 * m), firstCap = MAXH - (T.y - 112) - 112 - 70 - 60, cap = MAXH - 112 - 70 - 60;
+  var chunks = [], cur = [], h = 0;
+  items.forEach(function(it){ var ih = it.h + (it.last ? 6 : 0), cp = chunks.length ? cap : firstCap; if(h + ih > cp && cur.length){ chunks.push(cur); cur = []; h = 0; } cur.push(it); h += ih; });
+  if(cur.length || !chunks.length) chunks.push(cur);
   chunks.forEach(function(L, k){
-    if(L[0].k !== 'dc'){ var dd = L[0].d; L = [{ k:'dc', d:dd, n:items.filter(function(x){ return x.k === 'trip' && x.d === dd; }).length, b:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].b, i:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].i, rev:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].rev, h:62 }].concat(L); }
-    var r2 = p3ListBody(L, m, 112 + 56, W - 2 * m), H2 = r2.y + 20 + 42;
-    out.push(wrapSvg(W, H2, p3Head(W, M, 'แผนใหม่ · สรุปเที่ยวล่าช้า', 'รายเที่ยว · ลูกค้าในแผน · บิล กล่อง บาท') + p3ListHeadRow(m, 116, W - 2 * m).replace('📋 เที่ยวล่าช้า', '📋 สรุปเที่ยวล่าช้า' + (chunks.length > 1 ? ' (' + (k + 1) + '/' + chunks.length + ')' : '')) + r2.b + p3Foot(W, H2)));
+    if(L.length && L[0].k !== 'dc'){ var dd = L[0].d, hd = items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0]; L = [{ k:'dc', d:dd, n:hd.n, b:hd.b, i:hd.i, rev:hd.rev, h:62 }].concat(L); }
+    var y = k === 0 ? T.y : 116, body = k === 0 ? T.b : '';
+    if(L.length){ body += p3ListHeadRow(m, y, W - 2 * m).replace('📋 เที่ยวล่าช้า', '📋 รายการเที่ยวล่าช้า' + (chunks.length > 1 ? ' (' + (k + 1) + '/' + chunks.length + ')' : '')); var r2 = p3ListBody(L, m, y + 48, W - 2 * m); body += r2.b; y = r2.y; }
+    else body += p3T(W / 2, y + 40, 'ไม่มีเที่ยวล่าช้าในช่วงที่เลือก', 20, '#55657f', 400, 'middle'), y += 70;
+    var H2 = y + 20 + 42;
+    out.push(wrapSvg(W, H2, head() + body + p3Foot(W, H2)));
   });
   return out;
 }
 window.__pickupP3Export = async function(kind){
   try{
-    if(kind === 'delay'){ var set = p3DelaySet(); if(!set.length){ showToast('ไม่มีเที่ยวล่าช้าในช่วงที่เลือก'); return; } for(var i = 0; i < set.length; i++) saveFile(p3Stamp() + '-DelayList' + (set.length > 1 ? '-p' + (i + 1) : '') + '.png', await toPng(set[i], 2)); if(!window.__testSave) showToast('ดาวน์โหลดสรุปเที่ยวล่าช้าแล้ว ' + set.length + ' ภาพ'); return; }
+    if(kind === 'delay'){ var set = p3DelaySet(); for(var i = 0; i < set.length; i++) saveFile(p3Stamp() + '-DelayList' + (set.length > 1 ? '-p' + (i + 1) : '') + '.png', await toPng(set[i], 2)); if(!window.__testSave) showToast('ดาวน์โหลดสรุปเที่ยวล่าช้าแล้ว ' + set.length + ' ภาพ'); return; }
     if(kind === 'long'){ saveFile(p3Stamp() + '-Long.png', await toPng(p3Svg('long'), 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแบบยาวแล้ว'); return; }
     var c = p3Svg(kind); saveFile(p3Stamp() + '-16x9.png', await toPng(c, 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแล้ว'); }
   catch(err){ showToast('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); }
