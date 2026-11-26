@@ -226,7 +226,7 @@ function buildLineItems(rawRows) {
       customer: row.h,
       customerCode: row.t,
       plate: row.k,
-      vehicleType: row.l,
+      vehicleType: normVehicleType(row.l),
       productType: extractProduct(row.y),
       route: row.u,
       revenue: num(row.v),
@@ -243,6 +243,8 @@ function buildLineItems(rawRows) {
 // whether a trip with no Q/R at all is genuinely still out (report just ended) or badly overdue (Delay).
 function __todayKey() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 // [ปรับ 16/11/2569] planOpt (แผนใหม่ เท่านั้น): { cutoff(items, dcCode) -> นาที, product(items) -> 'แห้ง'|'เย็น' } · ไม่ส่ง planOpt = คำนวณแบบเดิมทุกอย่าง
+// [ปรับ 26/11/2569] '02 รถบริษัท นิ่มเอ็กซ์เพรส จำกัด' คือประเภทเดียวกับ '01 รถบริษัท' → รวมเป็นชื่อเดียว
+function normVehicleType(v){ return /^\s*02\s+รถบริษัท\s*นิ่มเอ็กซ์เพรส/.test(String(v || '')) ? '01  รถบริษัท' : v; }
 function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustomers, planOpt) {
   const byB = new Map();
   for (const li of lineItems) {
@@ -2490,7 +2492,7 @@ function wireAnalysis(){
 // [ปรับ 14/11/2569] โค้ดแชร์/ส่งออกย้ายไปไฟล์ share.js (โหลดก่อน app.js) — ส่งฟังก์ชันคำนวณเดิมให้ใช้ตรงๆ ไม่คำนวณซ้ำ
 function wireShare(){
   if(!window.PickupShare){ console.error("[share] share.js not loaded"); return; }
-  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows, tripEta:tripEta, tripLast:tripLast, dcShort:dcShortLabel });
+  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows, tripEta:tripEta, tripLast:tripLast, tripsNoExempt:tripsNoExempt, dcShort:dcShortLabel });
 }
 
 document.addEventListener('click', function(e){ var b = e.target.closest('[data-p3x]'); if(b && window.__pickupP3Export) window.__pickupP3Export(b.dataset.p3x); });
@@ -3141,6 +3143,16 @@ function tripEta(t){
   return R;
 }
 window.__pickupTripEta = tripEta;
+// เที่ยวที่ตัดลูกค้ายกเว้นกลับช้าออกทั้งหมด (ใช้ในหน้าแผนใหม่ CC) · สร้างจากรายการทั้งหมด ไม่ใช้ข้อยกเว้น
+var NOEX_CACHE = { k:null, v:null };
+function tripsNoExempt(){
+  if(NOEX_CACHE.k === state.trips && NOEX_CACHE.v) return NOEX_CACHE.v;
+  var ex = state.excludedCustomers || new Set(), src = state.allLineItems || state.lineItems;
+  var L = src.filter(function(li){ return !(li.customer && ex.has(li.customer)); });
+  var T = window.Core.buildTrips(L, REPORT_END_DATE_KEY, CUTOFF_OVERRIDES, new Set(), null);
+  T.forEach(function(t){ t.zone = ZONE_LOOKUP[t.dcCode] || 'ไม่ระบุภาค'; });
+  NOEX_CACHE = { k:state.trips, v:T }; return T;
+}
 function tripLast(t){   // ลูกค้ารายสุดท้ายที่ออกจากจุดรับ (ใช้แสดงในภาพรถ Delay)
   var L = liByIdx(), best = null;
   (t.lineItemIdx || []).forEach(function(ix){ var i = L.get(ix); if(i && i.leavePoint && (!best || i.leavePoint.ms > best.leavePoint.ms)) best = i; });
