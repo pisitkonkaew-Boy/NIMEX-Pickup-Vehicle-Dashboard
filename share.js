@@ -951,8 +951,10 @@ function p3Render(){
   var el = document.getElementById('p3View'); if(!el) return;
   if(!hasPlan()){ el.innerHTML = '<p class="p3-empty">ยังไม่มีรายชื่อลูกค้าในแผนใหม่ · เพิ่มได้ที่ ตั้งค่า → แผนลูกค้า</p>'; return; }
   var long = window.innerWidth < 1000, c = p3Svg(long ? 'long' : '169');
-  el.innerHTML = c.svg.replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
+  el.innerHTML = p3Uniq(c.svg, 'a').replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
 }
+// หน้าเว็บมี SVG หลายชุด (บางชุดซ่อนอยู่) → ตั้งชื่อ gradient ไม่ให้ซ้ำ ไม่งั้นสีพื้นหายเมื่อชุดแรกถูกซ่อน
+function p3Uniq(svg, tag){ return svg.replace(/p3hd/g, 'p3hd' + tag).replace(/p3bkk/g, 'p3bkk' + tag); }
 window.__pickupP3Render = p3Render;
 // ---------- รายการเที่ยวล่าช้า (ต่อท้ายอินโฟแบบยาว): เที่ยว + รายชื่อลูกค้าในแผน · บิล · กล่อง · บาท ----------
 function p3Over(x){
@@ -1008,7 +1010,7 @@ function p3ItemsH(L){ return L.reduce(function(a, it){ return a + it.h + (it.las
 // คันสุดท้ายเข้าคลัง: วันเดียว = เวลาของวันนั้น · หลายวัน = ค่าเฉลี่ยของเวลาคันสุดท้ายแต่ละวัน + วันที่ช้าที่สุด
 function p3LastIn(o){
   var byDay = {};
-  o.s.trips.forEach(function(x){ var t = x.t; if(!t.arriveDC || t.arriveSynthetic) return; var m = t.arriveDC.timeOfDayMin + (t.arriveDC.dateKey > t.dateKey ? 1440 : 0); if(byDay[t.dateKey] === undefined || m > byDay[t.dateKey]) byDay[t.dateKey] = m; });
+  o.s.trips.forEach(function(x){ var t = x.t; if(!t.arriveDC || t.arriveSynthetic || t.exempt) return; /* ไม่นับเที่ยวที่มีลูกค้ายกเว้นกลับช้า */ var m = t.arriveDC.timeOfDayMin + (t.arriveDC.dateKey > t.dateKey ? 1440 : 0); if(byDay[t.dateKey] === undefined || m > byDay[t.dateKey]) byDay[t.dateKey] = m; });
   var ks = Object.keys(byDay).sort(); if(!ks.length) return null;
   var mx = ks.reduce(function(a, k){ return byDay[k] > byDay[a] ? k : a; }, ks[0]), avg = Math.round(ks.reduce(function(a, k){ return a + byDay[k]; }, 0) / ks.length);
   var hm = function(m){ return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0') + (m >= 1440 ? ' (+1 วัน)' : ''); };
@@ -1078,7 +1080,7 @@ function ccStats(T){
   state.lineItems.forEach(function(li){ L.set(li.idx, li); });
   T.forEach(function(t){
     var st = t.status === 'ontime' ? 'on' : t.status === 'delay' ? 'de' : 'pe', cs = new Map();
-    t.lineItemIdx.forEach(function(ix){ var li = L.get(ix); if(!li) return; var k = li.customerCode || li.customer; var o = cs.get(k) || { name:li.customer || k, g:'c', b:0, i:0, rev:0, st:st }; o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems; o.rev += li.revenue || 0; cs.set(k, o); });
+    t.lineItemIdx.forEach(function(ix){ var li = L.get(ix); if(!li) return; var k = li.customerCode || li.customer; var o = cs.get(k) || { name:String(li.customer || '').trim() || 'D2D', g:'c', b:0, i:0, rev:0, st:st }; o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems; o.rev += li.revenue || 0; cs.set(k, o); });
     var A = R.all; A.t.n++; A.t[st]++;
     cs.forEach(function(o){ A.c.n++; A.c[st]++; A.b.n += o.b; A.b[st] += o.b; A.i.n += o.i; A.i[st] += o.i; });
     R.trips.push({ t:t, g:'c', st:st, cut:t.cutoffMin, cus:Array.from(cs.values()) });
@@ -1107,7 +1109,7 @@ function ccStamp(){ return p3Stamp().replace('-NewPlan-3DC', '-NewPlan-CC'); }
 window.__pickupCCRender = function(){
   var el = document.getElementById('ccView'); if(!el) return;
   var M = ccModel(); if(!M.dcs.length){ el.innerHTML = '<p class="p3-empty">ไม่มีเที่ยวรถ CC ในช่วงที่เลือก</p>'; return; }
-  el.innerHTML = p3Svg(window.innerWidth < 1000 ? 'long' : '169', M).svg.replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
+  el.innerHTML = p3Uniq(p3Svg(window.innerWidth < 1000 ? 'long' : '169', M).svg, 'c').replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
 };
 window.__pickupCCExport = async function(kind){
   try{

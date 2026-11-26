@@ -417,7 +417,7 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
     trips.push({
       b, key: tkey, dc, dcCode: dcCodeV, plate, vehicleType,
       dateKey: dispatch ? dispatch.dateKey : null,
-      dispatch, arriveDC, arriveSynthetic, arriveCI,
+      dispatch, arriveDC, arriveSynthetic, arriveCI, exempt: !!hasExemptCustomer,
       pickupPoints: customers.size,
       customers: Array.from(customers),
       routes: Array.from(routes),
