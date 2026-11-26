@@ -951,7 +951,7 @@ function p3Over(x){
   var t = x.t; if(t.arriveSynthetic || !t.arriveDC) return 'ไม่มีเวลากลับ';
   var hm = String(t.arriveDC.hh).padStart(2, '0') + ':' + String(t.arriveDC.mi).padStart(2, '0');
   if(t.arriveDC.dateKey !== t.dateKey) return 'ถึง ' + t.arriveDC.d + '/' + t.arriveDC.mo + ' ' + hm;
-  return 'ถึง ' + hm + ' (+' + fmtInt(t.arriveDC.timeOfDayMin - x.cut) + ' นาที)';
+  return 'ถึง ' + hm + (t.arriveCI ? ' เช็คอิน' : '') + ' (+' + fmtInt(t.arriveDC.timeOfDayMin - x.cut) + ' นาที)';
 }
 function p3DelayItems(M){
   var out = [];

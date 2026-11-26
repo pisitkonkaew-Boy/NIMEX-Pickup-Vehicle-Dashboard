@@ -276,6 +276,30 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
       __inferred.set(p.b, (p.plate && lastByPlate.get(p.plate)) || 'แห้ง');
     }
   }
+  // [เพิ่ม 26/11/2569] แผนใหม่: เวลาเช็คอินกลับเข้า DC (รายงาน NIMEX016402) · จับคู่ DC + ทะเบียน + วันจัดรถ
+  // รถวิ่งหลายรอบ: เช็คอินครั้งแรก → เที่ยวแรก ครั้งถัดไป → เที่ยวถัดไป (เรียงตามเวลาจัดรถ) · ใช้เมื่อเร็วกว่าเวลาถึงคลังในรายงานเดิม หรือรายงานเดิมไม่มีเวลา
+  const __ci = new Map();
+  if (planOpt && planOpt.checkin) {
+    const grp = new Map();
+    for (const [tkey, items] of byB.entries()) {
+      const di = items.filter(i => i.dispatch).sort((a, c) => a.dispatch.ms - c.dispatch.ms)[0];
+      if (!di) continue;
+      const gk = items[0].dcCode + '|' + String(items[0].plate || '').replace(/\s+/g, '') + '|' + di.dispatch.dateKey;
+      if (!grp.has(gk)) grp.set(gk, []);
+      grp.get(gk).push({ tkey, d: di.dispatch });
+    }
+    for (const [gk, L] of grp.entries()) {
+      const p = gk.split('|'), ends = planOpt.checkin(p[0], p[1], p[2]);
+      if (!ends || !ends.length) continue;
+      L.sort((a, c) => a.d.ms - c.d.ms);
+      let j = 0;
+      for (const x of L) {
+        while (j < ends.length && ends[j].ms < x.d.ms) j++;   // เช็คอินต้องหลังเวลาจัดรถของเที่ยวนั้น
+        if (j >= ends.length) break;
+        __ci.set(x.tkey, ends[j]); j++;
+      }
+    }
+  }
   const trips = [];
   for (const [tkey, items] of byB.entries()) {
     const b = items[0].b;
@@ -290,6 +314,9 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
       const arriveItemsR = items.filter(i => i.startUnload);
       arriveDC = arriveItemsR.length ? arriveItemsR.sort((a, c) => c.startUnload.ms - a.startUnload.ms)[0].startUnload : null;
     }
+    let arriveCI = false;
+    const ciE = __ci.get(tkey);
+    if (ciE && (!arriveDC || ciE.ms < arriveDC.ms)) { arriveDC = ciE.t; arriveCI = true; }
     if (!arriveDC && dispatch) {
       // Neither Q nor R exists anywhere in this trip.
       // [ปรับ 08/11/2569] ไม่มีเวลากลับเลย และวันจัดรถผ่านไปแล้ว (เทียบกับวันนี้) -> Delay; 'กำลังเข้าคลัง' มีได้เฉพาะเที่ยวของวันนี้
@@ -390,7 +417,7 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
     trips.push({
       b, key: tkey, dc, dcCode: dcCodeV, plate, vehicleType,
       dateKey: dispatch ? dispatch.dateKey : null,
-      dispatch, arriveDC, arriveSynthetic,
+      dispatch, arriveDC, arriveSynthetic, arriveCI,
       pickupPoints: customers.size,
       customers: Array.from(customers),
       routes: Array.from(routes),
@@ -672,7 +699,58 @@ function planLineItems(){
   });
   return out;
 }
+// [เพิ่ม 26/11/2569] เช็คอินกลับเข้า DC (เก็บใน Settings: 'ci:YYYY-MM-DD' = { 'dc|ทะเบียน': ['HH:MM|กม.', ...] } · ciMaxKm = ระยะห่างจาก DC สูงสุดที่ยอมรับ)
+// อ่านรายงาน Check-in: หาแถวหัวที่มี 'ทะเบียนรถ' และ 'ประเภท' แล้วเก็บเฉพาะ END → { days: { 'YYYY-MM-DD': { 'dc|ทะเบียน': ['HH:MM|กม.'] } }, ends:[...] }
+function parseCheckinSheet(aoa){
+  var h = -1; for(var i = 0; i < Math.min(aoa.length, 30); i++){ var r = aoa[i].map(function(x){ return String(x).trim(); }); if(r.indexOf('ทะเบียนรถ') !== -1 && r.indexOf('ประเภท') !== -1){ h = i; break; } }
+  if(h < 0) throw new Error('ไม่พบหัวตาราง (ทะเบียนรถ / ประเภท)');
+  var H = aoa[h].map(function(x){ return String(x).trim(); }), c = function(n){ return H.findIndex(function(x){ return x.indexOf(n) !== -1; }); };
+  var iDc = c('DC'), iPl = c('ทะเบียน'), iD = c('วันที่'), iT = c('เวลา'), iKm = c('ระยะ'), iTy = c('ประเภท'), days = {}, ends = [];
+  for(var j = h + 1; j < aoa.length; j++){
+    var r2 = aoa[j]; if(String(r2[iTy]).trim().toUpperCase() !== 'END') continue;
+    var dm = String(r2[iD]).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/), tm = String(r2[iT]).match(/(\d{1,2}):(\d{2})/); if(!dm || !tm) continue;
+    var y = +dm[3]; if(y > 2400) y -= 543;
+    var dk = y + '-' + pad2(dm[2]) + '-' + pad2(dm[1]), dc = dcCode(String(r2[iDc])), pl = String(r2[iPl]).replace(/\s+/g, ''), km = parseFloat(String(r2[iKm]).replace(/,/g, ''));
+    if(!dc || !pl) continue;
+    var k = dc + '|' + pl; (days[dk] = days[dk] || {}); (days[dk][k] = days[dk][k] || []).push(pad2(tm[1]) + ':' + tm[2] + '|' + (isFinite(km) ? km : ''));
+    ends.push({ dk:dk, k:k, km:isFinite(km) ? km : null });
+  }
+  return { days:days, ends:ends };
+}
+function ciRefresh(msg){
+  rebuildTripsFromLineItems(); renderAll(); renderCheckinInfo();
+  if(msg) showToast(msg);
+}
+function renderCheckinInfo(){
+  var S = ciSettings(), idx = S.ciDays || {}, days = Object.keys(idx).sort(), el = document.getElementById('ciInfo'), km = document.getElementById('ciKm');
+  if(km && document.activeElement !== km) km.value = ciMaxKm();
+  var sum = days.length ? days.length + ' วัน · ' + thDateKey(days[0]) + ' – ' + thDateKey(days[days.length - 1]) : 'ยังไม่มีข้อมูล';
+  var se = document.getElementById('sumCheckin'); if(se) se.textContent = sum + ' · ระยะ ≤ ' + ciMaxKm() + ' กม.';
+  if(!el) return;
+  if(!days.length){ el.innerHTML = '<p class="note">ยังไม่ได้นำเข้ารายงานเช็คอิน</p>'; return; }
+  // ผลการใช้เวลาเช็คอิน (ตามแผนใหม่ ช่วงวันที่มีข้อมูล)
+  var r = withPlanMode('new', function(){
+    var T = state.trips.filter(function(t){ return t.dateKey >= days[0] && t.dateKey <= days[days.length - 1]; });
+    return { n:T.length, ci:T.filter(function(t){ return t.arriveCI; }).length };
+  });
+  el.innerHTML = '<div class="ci-stats"><div><b>' + days.length + '</b><span>วันที่มีข้อมูล</span></div><div><b>' + fmtInt(days.reduce(function(a, d){ return a + idx[d]; }, 0)) + '</b><span>ครั้งปิดงาน (END) ทั้งหมด</span></div><div><b>' + fmtInt(r.ci) + '</b><span>เที่ยวที่ใช้เวลาเช็คอิน (จาก ' + fmtInt(r.n) + ' เที่ยวแผนใหม่)</span></div></div>' +
+    '<p class="note">ช่วงข้อมูล ' + sum + ' · เวลาในตารางรายเที่ยวที่มาจากเช็คอินจะมีคำว่า (เช็คอิน) ต่อท้าย</p>';
+}
+function ciSettings(){ return (window.__PICKUP_DATA && window.__PICKUP_DATA.settings) || {}; }
+function ciMaxKm(){ var v = +ciSettings().ciMaxKm; return v > 0 ? v : 1; }
+function ciTimeObj(dateKey, hh, mi){
+  var p = dateKey.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2], hh, mi, 0);
+  return { raw:'เช็คอิน ' + pad2(hh) + ':' + pad2(mi), y:d.getFullYear(), yBE:d.getFullYear() + 543, mo:d.getMonth() + 1, d:d.getDate(), hh:hh, mi:mi, ss:0, dateKey:dateKey, ms:d.getTime(), timeOfDayMin:hh * 60 + mi, dateObj:d };
+}
+function ciLookup(dc, plate, dateKey){
+  var day = ciSettings()['ci:' + dateKey]; if(!day) return null;
+  var L = day[dc + '|' + plate]; if(!L || !L.length) return null;
+  var mx = ciMaxKm();
+  return L.map(function(x){ var a = String(x).split('|'), hm = a[0].split(':'); return { km:+a[1], t:ciTimeObj(dateKey, +hm[0], +hm[1]) }; })
+    .filter(function(x){ return !(x.km > mx); }).map(function(x){ return { ms:x.t.ms, t:x.t, km:x.km }; }).sort(function(a, b){ return a.ms - b.ms; });
+}
 var PLAN_OPT = {
+  checkin: ciLookup,
   product: function(items){ return items.some(function(i){ return i.plan && i.plan.group === 'ทัน'; }) ? 'แห้ง' : 'เย็น'; },
   cutoff: function(items, dc){ return PLAN_OPT.product(items) === 'แห้ง' ? resolveCutoffMinutes(dc, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF; },
 };
@@ -1061,6 +1139,7 @@ function tripArriveTimeLabel(t){
   if(!t.arriveDC){ var e = (t.status === 'pending' || t.status === 'no-cutoff') ? tripEta(t) : null; return e && e.etaHM ? '≈ ' + e.etaHM + ' (ประมาณการ)' : '-'; }
   var s = pad2(t.arriveDC.hh) + ':' + pad2(t.arriveDC.mi);
   if(t.dateKey && t.arriveDC.dateKey !== t.dateKey) s += ' (+1d)';
+  if(t.arriveCI) s += ' (เช็คอิน)';
   return s;
 }
 
@@ -2241,7 +2320,7 @@ function afterSettingsRender(){
     rows.filter(function(tr){ var i = tr.querySelector('input[data-code]'); return i && ALLOWED_DC_CODES.indexOf(i.dataset.code) !== -1; })
       .reverse().forEach(function(tr){ tr.classList.add('inuse'); tb.insertBefore(tr, tb.firstChild); });
   }
-  renderCustomerChecklist(); renderColPicker(); settingsSummaries();
+  renderCustomerChecklist(); renderColPicker(); settingsSummaries(); try{ renderCheckinInfo(); }catch(e){}
 }
 function wireSettings(){
   document.querySelectorAll('.set-card [data-open]').forEach(function(btn){
@@ -3200,6 +3279,22 @@ function wirePlan(){
   var el = function(id){ return document.getElementById(id); };
   if(el('planSearch')) el('planSearch').addEventListener('input', function(e){ planUi.q = e.target.value; renderPlanSettings(); });
   if(el('planGroupFilter')) el('planGroupFilter').addEventListener('change', function(e){ planUi.g = e.target.value; renderPlanSettings(); });
+  if(el('ciImportBtn')) el('ciImportBtn').addEventListener('click', function(){ el('ciFile').click(); });
+  if(el('ciFile')) el('ciFile').addEventListener('change', async function(e){
+    var f = e.target.files[0]; e.target.value = ''; if(!f) return;
+    try{
+      var wb = XLSX.read(await f.arrayBuffer(), { type:'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:false, defval:'' });
+      var P = parseCheckinSheet(aoa), days = Object.keys(P.days).sort();
+      if(!days.length) throw new Error('ไม่พบรายการ END (ปิดงาน)');
+      var near = P.ends.filter(function(x){ return !(x.km > ciMaxKm()); }).length;
+      if(!confirm('นำเข้าเช็คอินจาก ' + f.name + '\n' + days.length + ' วัน (' + thDateKey(days[0]) + ' – ' + thDateKey(days[days.length - 1]) + ')\nปิดงาน (END) ' + fmtInt(P.ends.length) + ' ครั้ง · อยู่ใกล้ DC ≤ ' + ciMaxKm() + ' กม. ' + fmtInt(near) + ' ครั้ง\n\nจะแทนที่ข้อมูลเช็คอินของวันเหล่านี้ ยืนยัน?')) return;
+      var patch = {}; days.forEach(function(d){ patch['ci:' + d] = P.days[d]; });
+      var idx = Object.assign({}, ciSettings().ciDays || {}); days.forEach(function(d){ idx[d] = Object.keys(P.days[d]).reduce(function(a, k){ return a + P.days[d][k].length; }, 0); }); patch.ciDays = idx;
+      await window.__pickupSaveSettings(patch);
+      ciRefresh('นำเข้าเช็คอินแล้ว ' + days.length + ' วัน');
+    }catch(err){ showToast('นำเข้าเช็คอินไม่สำเร็จ: ' + err.message); }
+  });
+  if(el('ciKm')) el('ciKm').addEventListener('change', async function(e){ var v = Math.max(0.1, +e.target.value || 1); await window.__pickupSaveSettings({ ciMaxKm:v }); ciRefresh('ตั้งระยะเช็คอินไม่เกิน ' + v + ' กม. แล้ว'); });
   if(el('planImportBtn')) el('planImportBtn').addEventListener('click', function(){ el('planFile').click(); });
   if(el('planFile')) el('planFile').addEventListener('change', async function(e){
     var f = e.target.files[0]; e.target.value = ''; if(!f) return;
