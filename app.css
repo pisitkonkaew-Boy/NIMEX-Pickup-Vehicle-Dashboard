@@ -516,3 +516,10 @@ tr.plan-edit td{background:var(--panel2,rgba(212,175,55,.08));border-left:3px so
 .fl-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.fl-row label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);flex:1 1 160px}
 .fl-row input,.fl-row select{padding:7px 10px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:14px;background:var(--card,#fff);color:inherit}
 .fl-btns{margin-top:8px}.info-seg label input[type=checkbox]{accent-color:#d4af37}
+/* [เพิ่ม 26/11/2569] แผนใหม่ 3 DC */
+.p3-bar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:4px 0 12px}
+.p3-bar h2{margin:0;font-size:20px}.p3-bar p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.p3-acts{gap:8px}.p3-acts .xbtn{padding:10px 18px;min-height:0}
+.p3-view{border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(10,42,94,.08)}
+.p3-svg{display:block;width:100%;height:auto}
+.p3-empty{padding:40px;text-align:center;color:var(--muted)}

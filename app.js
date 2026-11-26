@@ -1769,6 +1769,7 @@ function renderAll(){
   safeRun('renderSharePreview', function(){ renderSharePreview(); });
   document.getElementById('filterCount').textContent = fmtInt(filtered.length) + ' เที่ยว ตรงตามตัวกรอง';
   safeRun('renderPlanBoxes', function(){ renderPlanBoxes(filtered); });
+  safeRun('renderPlan3', function(){ var tp = document.getElementById('tabPlan3'); if(tp && tp.style.display !== 'none' && window.__pickupP3Render) window.__pickupP3Render(); });
 }
 
 // ---------- UI wiring ----------
@@ -2412,6 +2413,8 @@ function wireShare(){
   window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows, tripEta:tripEta, tripLast:tripLast, dcShort:dcShortLabel });
 }
 
+document.addEventListener('click', function(e){ var b = e.target.closest('[data-p3x]'); if(b && window.__pickupP3Export) window.__pickupP3Export(b.dataset.p3x); });
+var __p3rs = null; window.addEventListener('resize', function(){ clearTimeout(__p3rs); __p3rs = setTimeout(function(){ var tp = document.getElementById('tabPlan3'); if(tp && tp.style.display !== 'none' && window.__pickupP3Render) window.__pickupP3Render(); }, 250); });
 function wireEvents(){
   document.querySelectorAll('.main-tab').forEach(function(tab){
     tab.addEventListener('click', function(){
@@ -2423,6 +2426,8 @@ function wireEvents(){
       document.getElementById('tabSettings').style.display = (target==='tabSettings') ? '' : 'none';
       document.getElementById('tabTrips').style.display = (target==='tabTrips') ? '' : 'none';
       document.getElementById('tabAnalysis').style.display = (target==='tabAnalysis') ? '' : 'none';
+      document.getElementById('tabPlan3').style.display = (target==='tabPlan3') ? '' : 'none';
+      if(target === 'tabPlan3' && window.__pickupP3Render) window.__pickupP3Render();
       if(target === 'tabAnalysis') renderAnalysis();
       if(target === 'tabCompare') renderCompareTab();
       if(target === 'tabProblems') renderProblemsTab();

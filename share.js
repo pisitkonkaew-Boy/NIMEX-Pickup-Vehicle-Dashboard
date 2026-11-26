@@ -828,6 +828,124 @@ function wireFleet(){
     try{ await fleetExport(b.dataset.flX); }catch(err){ xsay('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); } finally { b.disabled = false; }
   });
 }
+// ===================== [เพิ่ม 26/11/2569] แผนใหม่ · เทียบ 3 DC (หน้าเว็บ + อินโฟ 16:9 + อินโฟแบบยาว) =====================
+// ใช้กติกาแผนใหม่เสมอ (ไม่ขึ้นกับปุ่มแผนเดิม/แผนใหม่) · ทุก DC ในช่วงวันที่เลือก (ไม่ใช้ตัวกรอง DC) · ช่วงก่อนหน้าคิดแบบแผนใหม่เหมือนกัน
+var P3COL = { '691':'#0a2a5e', '610':'#b8860b', '621':'#2f8f8f' }, P3ALT = ['#6e4fb8', '#b8334a', '#3b7a2a'];
+var P3G = '#1d57b8', P3B = '#c0392b';
+function p3Trips(from, to){ return state.trips.filter(function(t){ return t.dateKey && t.dateKey >= from && t.dateKey <= to; }); }
+function p3Model(){
+  return withPlan('new', function(){
+    var cur = p3Trips(state.dateFrom, state.dateTo), pp = previousPeriod(state.dateFrom, state.dateTo, state.granularity), minK = dataMinKey();
+    var prev = (pp && minK && pp.from >= minK) ? p3Trips(pp.from, pp.to) : [];
+    var pack = function(f, pv, name, code){ return { name:name, code:code, s:planStats(f), p:planStats(pv), rev:f.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), prevRev:pv.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), hasPrev:pv.length > 0, delay:f.filter(function(t){ return t.status === 'delay'; }).length, pend:f.filter(function(t){ return t.status === 'pending' || t.status === 'no-cutoff'; }).length }; };
+    var codes = []; cur.forEach(function(t){ if(codes.indexOf(t.dcCode) === -1) codes.push(t.dcCode); });
+    var dcs = codes.map(function(c, i){ var f = cur.filter(function(t){ return t.dcCode === c; }); return pack(f, prev.filter(function(t){ return t.dcCode === c; }), dcShort(f[0].dc) || c, c); });
+    var r = function(o){ var x = o.s.all.t; return x.n ? x.on / x.n : -1; };
+    dcs.sort(function(a, b){ return r(b) - r(a); });
+    dcs.forEach(function(d, i){ d.col = P3COL[d.code] || P3ALT[i % P3ALT.length]; d.rank = i + 1; });
+    return { bkk:pack(cur, prev, 'ภาพรวม BKK', dcs.length + ' DC'), dcs:dcs, S:scopeText(), pp:pp };
+  });
+}
+function p3p(x){ return x && x.n ? x.on / x.n * 100 : null; }
+function p3d(c, p, dark){   // ผลต่าง (จุด) → [ข้อความ, สี]
+  var a = p3p(c), b = p3p(p); if(a === null || b === null) return ['–', dark ? '#9fb0cc' : '#9aa7bb'];
+  var d = a - b; return [(d >= 0 ? '▲ ' : '▼ ') + Math.abs(d).toFixed(2), d >= 0 ? (dark ? '#8fb4ff' : P3G) : (dark ? '#ff9b8f' : P3B)];
+}
+function p3rc(a, b, dark){ if(!b) return ['–', '#9aa7bb']; var d = (a - b) / b * 100; return [(d >= 0 ? '▲ ' : '▼ ') + Math.abs(d).toFixed(2) + '%', d >= 0 ? (dark ? '#8fb4ff' : P3G) : (dark ? '#ff9b8f' : P3B)]; }
+function p3T(x, y, s, fs, col, wt, anchor){ return '<text x="' + x + '" y="' + y + '" font-size="' + fs + '"' + (wt ? ' font-weight="' + wt + '"' : '') + ' fill="' + col + '"' + (anchor ? ' text-anchor="' + anchor + '"' : '') + '>' + s + '</text>'; }
+function p3W(s, fs){ return String(s).length * fs * 0.56; }
+function p3Card(o, x, y, w, h, lay, dark){
+  var col = dark ? '#d4af37' : o.col, ink = dark ? '#ffffff' : '#0b1f3f', mut = dark ? '#c9d6ee' : '#55657f', b = '', s = o.s, p = o.p;
+  b += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="18" fill="' + (dark ? 'url(#p3bkk)' : '#fff') + '"' + (dark ? '' : ' stroke="#dbe3f0"') + '/>';
+  b += '<path d="M' + x + ' ' + (y + 18) + 'a18 18 0 0 1 18 -18h' + (w - 36) + 'a18 18 0 0 1 18 18v-10h-' + w + 'z" fill="' + col + '"/>';
+  // หัวการ์ด
+  var pill = dark ? 'BKK' : (['🥇','🥈','🥉'][o.rank - 1] || '#' + o.rank) + ' อันดับ ' + o.rank, pw = p3W(pill, 14) + 26;
+  b += '<rect x="' + (x + 20) + '" y="' + (y + 20) + '" width="' + pw + '" height="28" rx="14" fill="' + col + '"/>' + p3T(x + 20 + pw / 2, y + 39, esc(pill), 14, dark ? '#0a2a5e' : '#fff', 600, 'middle');
+  b += p3T(x + 32 + pw, y + 44, esc(o.name), 26, ink, 700) + p3T(x + w - 20, y + 40, esc(dark ? o.code : 'DC ' + o.code), 14, mut, 400, 'end');
+  // ส่วนตัวเลขใหญ่
+  var bw = lay === 'h' ? 520 : w - 40, bx = x + 20, by = y + 60, gw = 210, gx = bx + bw - gw;
+  var on = p3p(s.all.t), d0 = p3d(s.all.t, p.all.t, dark);
+  b += p3T(bx, by + 16, 'Ontime % (เที่ยว)', 14, mut) + p3T(bx, by + 66, on === null ? '–' : on.toFixed(2) + '%', 54, dark ? '#fff' : col, 700);
+  b += '<text x="' + bx + '" y="' + (by + 90) + '" font-size="14" fill="' + mut + '"><tspan font-weight="700" fill="' + d0[1] + '">' + d0[0] + '</tspan> จุด · ' + fmtInt(s.all.t.on) + '/' + fmtInt(s.all.t.n) + ' เที่ยว</text>';
+  var rv = '฿' + fmtInt(Math.round(o.rev)), rc = o.hasPrev ? p3rc(o.rev, o.prevRev, dark) : ['–', '#9aa7bb'];
+  b += p3T(bx, by + 122, '💰 รายได้', 14, mut) + p3T(bx, by + 160, rv, 36, dark ? '#f0d57a' : ink, 700) + p3T(bx + p3W(rv, 36) + 18, by + 158, rc[0], 16, rc[1], 700);
+  [['t', 'กลุ่มทัน', '#e8f0fc', P3G, by + 4], ['l', 'กลุ่มตก', '#f1f1f1', '#1a1a1a', by + 100]].forEach(function(g){
+    var v = p3p(s[g[0]].t), dd = p3d(s[g[0]].t, p[g[0]].t, false);
+    b += '<rect x="' + gx + '" y="' + g[4] + '" width="' + gw + '" height="62" rx="12" fill="' + (dark ? '#fff' : g[2]) + '"/>' + p3T(gx + 14, g[4] + 20, g[1], 12, g[3], 700) +
+      p3T(gx + 14, g[4] + 50, v === null ? '–' : v.toFixed(2) + '%', 22, '#0b1f3f', 700) + p3T(gx + gw - 14, g[4] + 48, dd[0], 13, dd[1], 700, 'end');
+  });
+  // แถบ 4 ด้าน + จำนวนแยกกลุ่ม
+  var mx = lay === 'h' ? x + 570 : x + 20, mw = lay === 'h' ? w - 590 : w - 40, my = lay === 'h' ? y + 62 : by + 178, mh = (lay === 'h' ? h - 62 - 46 : h - (my - y) - 44) / 4;
+  [['เที่ยว','t'], ['ลูกค้า','c'], ['บิล','b'], ['กล่อง','i']].forEach(function(r, i){
+    var yy = my + i * mh, v = p3p(s.all[r[1]]), dd = p3d(s.all[r[1]], p.all[r[1]], dark), barX = mx + 70, barW = mw - 70 - 170;
+    b += p3T(mx, yy + 18, r[0], 15, mut) + '<rect x="' + barX + '" y="' + (yy + 8) + '" width="' + barW + '" height="10" rx="5" fill="' + (dark ? 'rgba(255,255,255,.15)' : '#eef2f9') + '"/>' +
+      '<rect x="' + barX + '" y="' + (yy + 8) + '" width="' + (barW * (v || 0) / 100) + '" height="10" rx="5" fill="' + col + '"/>' +
+      p3T(mx + mw - 80, yy + 19, v === null ? '–' : v.toFixed(2) + '%', 15, ink, 700, 'end') + p3T(mx + mw, yy + 19, dd[0], 13, dd[1], 700, 'end');
+    var cnt = function(k, lab, c, first){ var z = s[k][r[1]]; return '<tspan' + (first ? '' : ' dx="16"') + ' fill="' + c + '" font-weight="600">' + lab + ' ' + fmtInt(z.on) + '</tspan><tspan fill="' + c + '" opacity=".75">/' + fmtInt(z.n) + '</tspan>'; };
+    b += '<text x="' + barX + '" y="' + (yy + 38) + '" font-size="13">' + cnt('all', 'Ontime', dark ? '#c9d6ee' : '#55657f', 1) + cnt('t', 'ทัน', dark ? '#9cc0ff' : P3G) + cnt('l', 'ตก', dark ? '#fff' : '#1a1a1a') + '</text>';
+  });
+  // แถบล่าง
+  b += '<rect x="' + (x + 1) + '" y="' + (y + h - 36) + '" width="' + (w - 2) + '" height="35" fill="' + (dark ? 'rgba(255,255,255,.08)' : '#f6f8fc') + '"/>' +
+    '<text x="' + (x + 20) + '" y="' + (y + h - 13) + '" font-size="15" fill="' + ink + '">⏰ Delay <tspan font-weight="700" fill="' + (dark ? '#ff9b8f' : P3B) + '">' + fmtInt(o.delay) + '</tspan> คัน</text>' +
+    '<text x="' + (x + w - 20) + '" y="' + (y + h - 13) + '" font-size="15" fill="' + ink + '" text-anchor="end">🚚 กำลังกลับ <tspan font-weight="700">' + fmtInt(o.pend) + '</tspan> คัน</text>';
+  return b;
+}
+function p3Table(M, x, y, w, h){
+  var b = '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="18" fill="#fff" stroke="#dbe3f0"/><rect x="' + (x + 20) + '" y="' + y + '" width="' + (w - 40) + '" height="3" fill="#d4af37"/>';
+  b += p3T(x + 20, y + 36, '📊 ตารางเทียบ ' + M.dcs.length + ' DC', 19, '#0b1f3f', 700) + '<rect x="' + (x + 230) + '" y="' + (y + 20) + '" width="44" height="22" rx="5" fill="#e8f0fc"/>' + p3T(x + 252, y + 36, 'ดีสุด', 12, '#55657f', 400, 'middle') + '<rect x="' + (x + 280) + '" y="' + (y + 20) + '" width="48" height="22" rx="5" fill="#fdecea"/>' + p3T(x + 304, y + 36, 'ต่ำสุด', 12, '#55657f', 400, 'middle');
+  var mets = [['Ontime % เที่ยว (รวม)','all','t'], ['Ontime % เที่ยว กลุ่มทัน','t','t'], ['Ontime % เที่ยว กลุ่มตก','l','t'], ['Ontime % ลูกค้า','all','c'], ['Ontime % บิล','all','b'], ['Ontime % กล่อง','all','i']];
+  var tx = x + 20, tw = w - 40, ty = y + 52, lw = tw * 0.3, cw = (tw - lw) / Math.max(1, M.dcs.length), rh = (h - 52 - 44 - 16) / mets.length;
+  b += '<rect x="' + tx + '" y="' + ty + '" width="' + tw + '" height="44" fill="#0a2a5e"/>' + p3T(tx + lw / 2, ty + 28, 'ตัวชี้วัด', 15, '#fff', 600, 'middle');
+  M.dcs.forEach(function(d, i){ b += p3T(tx + lw + cw * i + cw / 2, ty + 28, esc(d.name), 15, '#fff', 600, 'middle'); });
+  mets.forEach(function(m, r){
+    var yy = ty + 44 + r * rh, vals = M.dcs.map(function(d){ return p3p(d.s[m[1]][m[2]]); }), ok = vals.filter(function(v){ return v !== null; }), mx = Math.max.apply(null, ok), mn = Math.min.apply(null, ok);
+    b += p3T(tx + 10, yy + rh / 2 + 6, m[0], 15, '#55657f');
+    M.dcs.forEach(function(d, i){
+      var v = vals[i], cx = tx + lw + cw * i, dd = p3d(d.s[m[1]][m[2]], d.p[m[1]][m[2]], false);
+      if(ok.length > 1 && mx !== mn && v !== null && (v === mx || v === mn)) b += '<rect x="' + cx + '" y="' + yy + '" width="' + cw + '" height="' + rh + '" fill="' + (v === mx ? '#e8f0fc' : '#fdecea') + '"/>';
+      b += p3T(cx + cw - 80, yy + rh / 2 + 6, v === null ? '–' : v.toFixed(2) + '%', 17, '#0b1f3f', 700, 'end') + p3T(cx + cw - 10, yy + rh / 2 + 6, dd[0], 14, dd[1], 700, 'end');
+    });
+    b += '<line x1="' + tx + '" x2="' + (tx + tw) + '" y1="' + (yy + rh) + '" y2="' + (yy + rh) + '" stroke="#e3e9f3"/>';
+  });
+  return b;
+}
+function p3Head(W, M){
+  var S = M.S, sub = S.has ? 'เทียบ ' + S.cmp + ' · ▲▼ = จุด' : 'ไม่มีช่วงก่อนหน้า';
+  return '<defs><linearGradient id="p3hd" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071f4a"/><stop offset=".5" stop-color="#143f8c"/><stop offset="1" stop-color="#071f4a"/></linearGradient><linearGradient id="p3bkk" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#0a2a5e"/><stop offset="1" stop-color="#123f8c"/></linearGradient></defs>' +
+    '<rect width="' + W + '" height="96" fill="url(#p3hd)"/><rect y="96" width="' + W + '" height="5" fill="#d4af37"/><rect x="30" y="10" width="124" height="76" rx="14" fill="#fff"/><image x="40" y="16" width="104" height="64" href="' + logoSrc() + '" preserveAspectRatio="xMidYMid meet"/>' +
+    p3T(178, 48, 'แผนใหม่ · เทียบ ' + M.dcs.length + ' DC', 32, '#fff', 600) + p3T(178, 78, 'Ontime % ทุกด้าน · เรียงจาก DC ที่ดีที่สุด', 18, '#e6d79c') +
+    '<rect x="' + (W - 30 - 360) + '" y="12" width="360" height="72" rx="14" fill="rgba(255,255,255,.08)" stroke="#d4af37"/>' + p3T(W - 30 - 180, 42, esc(S.gran + ' · ' + S.range), 17, '#fff', 700, 'middle') + p3T(W - 30 - 180, 66, esc(sub), 13, '#fff', 400, 'middle');
+}
+function p3Foot(W, H){ return '<rect y="' + (H - 42) + '" width="' + W + '" height="42" fill="#0a2a5e"/><rect y="' + (H - 42) + '" width="' + W + '" height="3" fill="#d4af37"/>' + p3T(W / 2, H - 15, 'NIM Express · SEAL Gold Chain    ข้อมูลจากรายงาน NIMEX016267', 14, '#dfe8f7', 400, 'middle'); }
+function p3Svg(kind, M){
+  M = M || p3Model();
+  var b = '', m = 30, g = 16, n = Math.max(1, M.dcs.length);
+  if(kind === 'long'){
+    var W = 1240, cw = W - 2 * m, y = 112, ch = 300;
+    b += p3Card(M.bkk, m, y, cw, ch, 'h', true); y += ch + g;
+    var th = 52 + 44 + 6 * 46 + 16; b += p3Table(M, m, y, cw, th); y += th + g;
+    M.dcs.forEach(function(d){ b += p3Card(d, m, y, cw, ch, 'h', false); y += ch + g; });
+    var H = y + 8 + 42;
+    return wrapSvg(W, H, p3Head(W, M) + b + p3Foot(W, H));
+  }
+  var W2 = 1920, H2 = 1080, top = 112, half = (W2 - 2 * m - g) / 2, h1 = 470;
+  b += p3Card(M.bkk, m, top, half, h1, 'v', true) + p3Table(M, m + half + g, top, half, h1);
+  var y2 = top + h1 + g, h2 = H2 - 42 - 14 - y2, cw2 = (W2 - 2 * m - g * (n - 1)) / n;
+  M.dcs.forEach(function(d, i){ b += p3Card(d, m + i * (cw2 + g), y2, cw2, h2, 'v', false); });
+  return wrapSvg(W2, H2, p3Head(W2, M) + b + p3Foot(W2, H2));
+}
+function p3Stamp(){ var f = state.dateFrom || '', per = state.granularity === 'month' ? f.slice(0, 7) : state.granularity === 'week' ? f + '-week' : f; return 'NIMEX-Pickup-' + per + '-NewPlan-3DC'; }
+function p3Render(){
+  var el = document.getElementById('p3View'); if(!el) return;
+  if(!hasPlan()){ el.innerHTML = '<p class="p3-empty">ยังไม่มีรายชื่อลูกค้าในแผนใหม่ · เพิ่มได้ที่ ตั้งค่า → แผนลูกค้า</p>'; return; }
+  var long = window.innerWidth < 1000, c = p3Svg(long ? 'long' : '169');
+  el.innerHTML = c.svg.replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
+}
+window.__pickupP3Render = p3Render;
+window.__pickupP3Export = async function(kind){
+  try{ var c = p3Svg(kind); saveFile(p3Stamp() + (kind === 'long' ? '-Long' : '-16x9') + '.png', await toPng(c, 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแล้ว'); }
+  catch(err){ showToast('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); }
+};
 function renderInfoOpts(){
   var el = document.getElementById('infoOpts'); if(!el) return;
   var md = infoMode(), hp = hasPlan(), rad = function(v, t, dis){ return '<label class="' + (md === v ? 'on' : '') + (dis ? ' dis' : '') + '"><input type="radio" name="infoMode" value="' + v + '"' + (md === v ? ' checked' : '') + (dis ? ' disabled' : '') + '> ' + t + '</label>'; };
