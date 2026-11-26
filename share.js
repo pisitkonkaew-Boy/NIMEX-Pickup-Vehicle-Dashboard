@@ -912,11 +912,11 @@ function p3Table(M, x, y, w, h){
   });
   return b;
 }
-function p3Head(W, M){
+function p3Head(W, M, ttl, sub2){
   var S = M.S, sub = S.has ? 'เทียบ ' + S.cmp + ' · ▲▼ = จุด' : 'ไม่มีช่วงก่อนหน้า';
   return '<defs><linearGradient id="p3hd" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#071f4a"/><stop offset=".5" stop-color="#143f8c"/><stop offset="1" stop-color="#071f4a"/></linearGradient><linearGradient id="p3bkk" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#0a2a5e"/><stop offset="1" stop-color="#123f8c"/></linearGradient></defs>' +
     '<rect width="' + W + '" height="96" fill="url(#p3hd)"/><rect y="96" width="' + W + '" height="5" fill="#d4af37"/><rect x="30" y="10" width="124" height="76" rx="14" fill="#fff"/><image x="40" y="16" width="104" height="64" href="' + logoSrc() + '" preserveAspectRatio="xMidYMid meet"/>' +
-    p3T(178, 48, 'แผนใหม่ · เทียบ ' + M.dcs.length + ' DC', 32, '#fff', 600) + p3T(178, 78, 'Ontime % ทุกด้าน · เรียงจาก DC ที่ดีที่สุด', 18, '#e6d79c') +
+    p3T(178, 48, ttl || 'แผนใหม่ · เทียบ ' + M.dcs.length + ' DC', 32, '#fff', 600) + p3T(178, 78, sub2 || 'Ontime % ทุกด้าน · เรียงจาก DC ที่ดีที่สุด', 18, '#e6d79c') +
     '<rect x="' + (W - 30 - 360) + '" y="12" width="360" height="72" rx="14" fill="rgba(255,255,255,.08)" stroke="#d4af37"/>' + p3T(W - 30 - 180, 42, esc(S.gran + ' · ' + S.range), 17, '#fff', 700, 'middle') + p3T(W - 30 - 180, 66, esc(sub), 13, '#fff', 400, 'middle');
 }
 function p3Foot(W, H){ return '<rect y="' + (H - 42) + '" width="' + W + '" height="42" fill="#0a2a5e"/><rect y="' + (H - 42) + '" width="' + W + '" height="3" fill="#d4af37"/>' + p3T(W / 2, H - 15, 'NIM Express · SEAL Gold Chain    ข้อมูลจากรายงาน NIMEX016267', 14, '#dfe8f7', 400, 'middle'); }
@@ -977,7 +977,7 @@ function p3ListBody(items, x0, y0, w){
     } else if(it.k === 'trip'){
       var t = it.x.t, gl = it.x.g === 't' ? 'กลุ่มทัน' : 'กลุ่มตก', gc = it.x.g === 't' ? P3G : '#1a1a1a';
       b += '<rect x="' + x0 + '" y="' + (y + 6) + '" width="' + w + '" height="34" rx="8" fill="#f1f4fa"/>' +
-        '<text x="' + (x0 + 14) + '" y="' + (y + 29) + '" font-size="15" fill="#0b1f3f"><tspan font-weight="700">' + (t.dispatch ? t.dispatch.d + '/' + t.dispatch.mo : '') + ' · ' + esc(t.plate) + '</tspan><tspan dx="10" fill="#55657f">' + esc(flFit(flStrip(t.routes[0]) || '', 330, 15)) + '</tspan>' +
+        '<text x="' + (x0 + 14) + '" y="' + (y + 29) + '" font-size="15" fill="#0b1f3f"><tspan font-weight="700">' + (t.dispatch ? t.dispatch.d + '/' + t.dispatch.mo : '') + ' · ' + esc(t.plate) + '</tspan>' + (t.tripNo > 1 ? '<tspan dx="8" font-weight="700" fill="#b8860b">[รอบ ' + t.tripNo + ']</tspan>' : '') + '<tspan dx="10" fill="#55657f">' + esc(flFit(flStrip(t.routes[0]) || '', 330, 15)) + '</tspan>' +
         '<tspan dx="10" fill="' + gc + '" font-weight="700">' + gl + '</tspan><tspan dx="10" fill="#55657f">ตัด ' + flMin(it.x.cut) + ' →</tspan><tspan dx="6" fill="' + P3B + '" font-weight="700">' + esc(p3Over(it.x)) + '</tspan></text>' +
         p3T(nx[0], y + 29, fmtInt(it.b), 15, '#0b1f3f', 700, 'end') + p3T(nx[1], y + 29, fmtInt(it.i), 15, '#0b1f3f', 700, 'end') + p3T(nx[2], y + 29, '฿' + fmtInt(Math.round(it.rev)), 15, '#0b1f3f', 700, 'end');
     } else {
@@ -997,25 +997,24 @@ function p3ListHeadRow(x0, y, w){
     p3T(nx[0], y + 26, 'บิล', 15, '#f0d57a', 700, 'end') + p3T(nx[1], y + 26, 'กล่อง', 15, '#f0d57a', 700, 'end') + p3T(nx[2], y + 26, 'บาท', 15, '#f0d57a', 700, 'end');
 }
 function p3ItemsH(L){ return L.reduce(function(a, it){ return a + it.h + (it.last ? 6 : 0); }, 0); }
-function p3LongSet(){
-  var M = p3Model(), items = p3DelayItems(M), base = p3Svg('long', M), W = 1240, m = 30, MAXH = 6400, out = [];
-  if(!items.length) return [base];
-  var hBase = base.H, need = p3ItemsH(items) + 60;
-  if(hBase + need <= MAXH) return [p3Svg('long', M, items)];
-  out.push(base);
+function p3DelaySet(){
+  // [ปรับ 26/11/2569] แยกภาพ: สรุปผล (ปุ่มอินโฟแบบยาว) กับ สรุปเที่ยวล่าช้า (ปุ่มนี้) · ยาวเกินแบ่งหลายภาพ
+  var M = p3Model(), items = p3DelayItems(M), W = 1240, m = 30, MAXH = 6400, out = [];
+  if(!items.length) return [];
   var chunks = [], cur = [], h = 0, cap = MAXH - 112 - 70 - 60;
   items.forEach(function(it){ var ih = it.h + (it.last ? 6 : 0); if(h + ih > cap && cur.length){ chunks.push(cur); cur = []; h = 0; } cur.push(it); h += ih; });
   if(cur.length) chunks.push(cur);
   chunks.forEach(function(L, k){
     if(L[0].k !== 'dc'){ var dd = L[0].d; L = [{ k:'dc', d:dd, n:items.filter(function(x){ return x.k === 'trip' && x.d === dd; }).length, b:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].b, i:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].i, rev:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].rev, h:62 }].concat(L); }
     var r2 = p3ListBody(L, m, 112 + 56, W - 2 * m), H2 = r2.y + 20 + 42;
-    out.push(wrapSvg(W, H2, p3Head(W, M) + p3ListHeadRow(m, 116, W - 2 * m).replace('📋 เที่ยวล่าช้า', '📋 เที่ยวล่าช้า (' + (k + 1) + '/' + chunks.length + ')') + r2.b + p3Foot(W, H2)));
+    out.push(wrapSvg(W, H2, p3Head(W, M, 'แผนใหม่ · สรุปเที่ยวล่าช้า', 'รายเที่ยว · ลูกค้าในแผน · บิล กล่อง บาท') + p3ListHeadRow(m, 116, W - 2 * m).replace('📋 เที่ยวล่าช้า', '📋 สรุปเที่ยวล่าช้า' + (chunks.length > 1 ? ' (' + (k + 1) + '/' + chunks.length + ')' : '')) + r2.b + p3Foot(W, H2)));
   });
   return out;
 }
 window.__pickupP3Export = async function(kind){
   try{
-    if(kind === 'long'){ var set = p3LongSet(); for(var i = 0; i < set.length; i++) saveFile(p3Stamp() + '-Long' + (set.length > 1 ? '-p' + (i + 1) : '') + '.png', await toPng(set[i], 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแบบยาวแล้ว ' + set.length + ' ภาพ'); return; }
+    if(kind === 'delay'){ var set = p3DelaySet(); if(!set.length){ showToast('ไม่มีเที่ยวล่าช้าในช่วงที่เลือก'); return; } for(var i = 0; i < set.length; i++) saveFile(p3Stamp() + '-DelayList' + (set.length > 1 ? '-p' + (i + 1) : '') + '.png', await toPng(set[i], 2)); if(!window.__testSave) showToast('ดาวน์โหลดสรุปเที่ยวล่าช้าแล้ว ' + set.length + ' ภาพ'); return; }
+    if(kind === 'long'){ saveFile(p3Stamp() + '-Long.png', await toPng(p3Svg('long'), 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแบบยาวแล้ว'); return; }
     var c = p3Svg(kind); saveFile(p3Stamp() + '-16x9.png', await toPng(c, 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแล้ว'); }
   catch(err){ showToast('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); }
 };
