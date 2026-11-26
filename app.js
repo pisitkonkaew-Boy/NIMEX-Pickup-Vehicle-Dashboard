@@ -2996,15 +2996,17 @@ function planStats(trips){
     var m = byTrip.get(t.key); if(!m) return;
     var res = {};
     m.forEach(function(o, ck){
+      if(!o.b && !o.i) return;   // [ปรับ 26/11/2569] ลูกค้าที่บิลและกล่องเป็น 0 ไม่นับ/ไม่แสดงทุกมิติ
       var st = planPickStatus(t, o.g === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF); res[o.g] = st; o.st = st;
       ['all', o.g].forEach(function(g){ var X = R[g]; X.c.n++; X.c[st]++; X.b.n += o.b; X.b[st] += o.b; X.i.n += o.i; X.i[st] += o.i; X.cuSet.add(ck); });
     });
+    if(!res.t && !res.l) return;   // เที่ยวที่ลูกค้าในแผนเป็น 0 ทั้งหมด ไม่นับ
     // เที่ยว: ยึดเวลารถ · 1 เที่ยวอยู่กลุ่มเดียวตามประเภทเที่ยว (ไม่มีเลขใบรายการ → มีลูกค้ากลุ่มทัน = ทัน ไม่งั้น ตก)
     // เข้ารับอย่างเดียวที่มีแต่ลูกค้ากลุ่มตก (ไม่มีกลุ่มทันเลย) → นับเป็นกลุ่มตก
     var tt = tripType.get(t.key) || {}, tg = tt['3'] ? 'l' : tt['5'] ? (res.t ? 't' : 'l') : (res.t ? 't' : 'l');
     var a = planPickStatus(t, tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF);
     R[tg].t.n++; R[tg].t[a]++; R.all.t.n++; R.all.t[a]++;
-    R.trips.push({ t:t, g:tg, st:a, cut:tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF, cus:Array.from(m.values()) });   // รายเที่ยว (ใช้ในรายการเที่ยวล่าช้า)
+    R.trips.push({ t:t, g:tg, st:a, cut:tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF, cus:Array.from(m.values()).filter(function(c){ return c.b || c.i; }) });   // รายเที่ยว (ใช้ในรายการเที่ยวล่าช้า)
   });
   ['all','t','l'].forEach(function(g){ R[g].cu = R[g].cuSet.size; });
   return R;

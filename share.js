@@ -1097,6 +1097,8 @@ function ccStats(T){
   T.forEach(function(t){
     var st = t.status === 'ontime' ? 'on' : t.status === 'delay' ? 'de' : 'pe', cs = new Map();
     t.lineItemIdx.forEach(function(ix){ var li = L.get(ix); if(!li) return; var k = li.customerCode || li.customer; var o = cs.get(k) || { name:String(li.customer || '').trim() || 'D2D', g:'c', b:0, i:0, rev:0, st:st }; o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems; o.rev += li.revenue || 0; cs.set(k, o); });
+    cs.forEach(function(o, k){ if(!o.b && !o.i) cs.delete(k); });   // [ปรับ 26/11/2569] ลูกค้าที่บิลและกล่องเป็น 0 ไม่นับ/ไม่แสดง
+    if(!cs.size) return;   // เที่ยวที่ลูกค้าเป็น 0 ทั้งหมด ไม่นับ
     var A = R.all; A.t.n++; A.t[st]++;
     cs.forEach(function(o){ A.c.n++; A.c[st]++; A.b.n += o.b; A.b[st] += o.b; A.i.n += o.i; A.i[st] += o.i; });
     R.trips.push({ t:t, g:'c', st:st, cut:t.cutoffMin, cus:Array.from(cs.values()) });
