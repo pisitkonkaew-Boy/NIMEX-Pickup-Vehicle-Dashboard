@@ -879,7 +879,8 @@ function tripMatchesNonDateFilters(t){
   if(f.tripGroupFilter === 'single' && t.tripGroupSize !== 1) return false;
   if(f.tripGroupFilter === 'multi' && t.tripGroupSize <= 1) return false;
   if(f.productFilter){
-    if(!t.productTypes.length || t.productTypes.indexOf(f.productFilter) === -1) return false;
+    // [ปรับ 26/11/2569] แยก AB/CC ให้ขาดโดยยึดเที่ยว: เที่ยวอยู่ฝั่งเดียวตามสินค้าส่วนใหญ่ (เดิม: เที่ยวที่มีสินค้านั้นปนอยู่ก็นับ)
+    if(t.dominantProduct !== f.productFilter) return false;
   }
   return true;
 }
