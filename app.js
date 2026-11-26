@@ -3041,10 +3041,13 @@ function tripEta(t){
     var td = etaPick(M, [['todP', dc + '|' + t.plate, 'ทะเบียนนี้', 3], ['todD', dc, 'ค่าเฉลี่ย DC', 1]]);
     if(td){ R.eta = day0 + td.v * 6e4; R.basis = 'ยังไม่เริ่มรับ · เวลาถึงคลังปกติของ' + td.src + ' (' + td.n + ' เที่ยว)'; R.n = td.n; R.src = td.src; }
   }
+  // [ปรับ 26/11/2569] รถยังไม่ถึงคลัง → ETA ต้องหลังเวลาปัจจุบันเสมอ (ถ้าประมาณการได้เวลาที่ผ่านไปแล้ว ขยับเป็น ตอนนี้ + 15 นาที ปัดขึ้นทีละ 5 นาที)
   if(R.eta !== null){
+    var now = Date.now();
+    if(R.eta <= now){ R.etaOrig = hmOf(R.eta); R.eta = Math.ceil((now + 15 * 6e4) / (5 * 6e4)) * 5 * 6e4; R.basis += ' · เลยเวลาประมาณการเดิม ' + R.etaOrig + ' แล้วยังไม่ถึงคลัง จึงขยับเป็นตอนนี้ + 15 นาที'; R.shifted = true; }
     R.etaHM = hmOf(R.eta); R.etaMin = Math.round((R.eta - day0) / 6e4);
     R.over = t.cutoffMin === null || t.cutoffMin === undefined ? null : R.etaMin - t.cutoffMin;
-    R.passed = Date.now() > R.eta;
+    R.passed = !!R.shifted;
   }
   return R;
 }

@@ -720,7 +720,7 @@ function flCell(k, r){   // → [ข้อความ, สี, ตัวหน�
     case 'over':
       if(!p) return [r.over === null ? 'Delay' : '+' + fmtInt(r.over), '#c0392b', 1];
       if(!e || e.over === null) return ['–'];
-      if(e.passed && e.over > 0) return ['เลย ETA · +' + fmtInt(e.over), '#c0392b', 1];
+      if(e.passed) return [(e.over > 0 ? 'เลย ETA เดิม · คาดเลย +' + fmtInt(e.over) : 'เลย ETA เดิม ' + e.etaOrig), '#c0392b', 1];
       return e.over > 0 ? ['คาดเลย +' + fmtInt(e.over), '#c0392b', 1] : ['คาดทัน (' + fmtInt(-e.over) + ')', '#1d57b8', 1];
     case 'last': return [p ? (e && e.last) || 'ยังไม่เริ่มรับ' : (tripLast(t) || '–')];
     case 'basis': return [p ? (e && e.basis) || 'ไม่มีประวัติพอประมาณการ' : '–', '#55657f'];
@@ -734,7 +734,7 @@ function flSummary(rows){
   var d = rows.filter(function(r){ return r.st === 'delay'; }), p = rows.filter(function(r){ return r.st === 'pend'; });
   var dm = d.filter(function(r){ return r.over !== null; }).map(function(r){ return r.over; });
   return { d:d.length, avg:dm.length ? Math.round(dm.reduce(function(a, b){ return a + b; }, 0) / dm.length) : null, max:dm.length ? Math.max.apply(null, dm) : null,
-    p:p.length, ok:p.filter(function(r){ return r.e && r.e.over !== null && r.e.over <= 0; }).length, late:p.filter(function(r){ return r.e && r.e.over > 0; }).length, passed:p.filter(function(r){ return r.e && r.e.passed && r.e.over > 0; }).length };
+    p:p.length, ok:p.filter(function(r){ return r.e && r.e.over !== null && r.e.over <= 0; }).length, late:p.filter(function(r){ return r.e && r.e.over > 0; }).length, passed:p.filter(function(r){ return r.e && r.e.passed; }).length };
 }
 function fleetSvg(rows, all, pg, pages, long){
   var W = 1920, m = 30, head = 116, top = head + 16, RH = 42, HH = 40, cols = FCOL.filter(function(c){ return FL.cols.indexOf(c[0]) !== -1; });
