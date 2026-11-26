@@ -689,10 +689,20 @@ function planOf(li){
   if(c) return PLAN.map.get(li.dcCode + '|' + c) || null;
   var n = planNormName(li.customer); return n ? (PLAN.byName.get(li.dcCode + '|' + n) || null) : null;
 }
+// [ปรับ 26/11/2569] แยกรถ AB / CC ให้ขาดโดยยึดเที่ยว: เที่ยวที่สินค้าส่วนใหญ่เป็นเย็น (รถ CC) ไม่นับในแผนใหม่ AB เลย
+function ccTripKeySet(){
+  var m = new Map();
+  state.allLineItems.forEach(function(li){
+    if(!li.b) return; var k = li.b + '|' + String(li.plate || '').trim() + '|' + (li.dispatch ? li.dispatch.dateKey : '');
+    var o = m.get(k) || { d:0, c:0 }; o.d += li.dryBills + li.dryItems; o.c += li.coldBills + li.coldItems; m.set(k, o);
+  });
+  var S = new Set(); m.forEach(function(o, k){ if(o.c > o.d) S.add(k); }); return S;
+}
 function planLineItems(){
-  var out = [];
+  var out = [], CCK = ccTripKeySet();
   state.allLineItems.forEach(function(li){
     if(!planIsAB(li)) return;
+    if(CCK.has(li.b + '|' + String(li.plate || '').trim() + '|' + (li.dispatch ? li.dispatch.dateKey : ''))) return;   // อยู่บนรถ CC
     var p = planOf(li); if(!p) return;
     var c = Object.assign({}, li); c.plan = p;
     if(p.group === 'ตก'){ c.coldBills = li.dryBills; c.coldItems = li.dryItems; c.dryBills = 0; c.dryItems = 0; c.productType = 'เย็น'; }
