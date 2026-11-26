@@ -3,7 +3,7 @@
 /* ===== NIMEX shell glue: layout only (tabs, segments, menu, theme, cover). No calculations here. ===== */
 (function(){
   var root=document.documentElement, KEY='nimex-pickup-theme';
-  var TITLES={tabDashboard:'ภาพรวมรถเข้ารับสินค้า',tabCompare:'เปรียบเทียบผล',tabTrips:'รายละเอียดรายเที่ยว',tabAnalysis:'ผลการวิเคราะห์',tabProblems:'สรุปปัญหา (Delay / ยังไม่กลับ)',tabSettings:'ตั้งค่า'};
+  var TITLES={tabDashboard:'ภาพรวมรถเข้ารับสินค้า',tabCompare:'เปรียบเทียบผล',tabTrips:'รายละเอียดรายเที่ยว',tabAnalysis:'ผลการวิเคราะห์',tabProblems:'สรุปปัญหา (Delay / กำลังเข้าคลัง)',tabSettings:'ตั้งค่า'};
   var $=function(id){return document.getElementById(id)};
 
   /* ---- theme ---- */
@@ -292,7 +292,7 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
     }
     if (!arriveDC && dispatch) {
       // Neither Q nor R exists anywhere in this trip.
-      // [ปรับ 08/11/2569] ไม่มีเวลากลับเลย และวันจัดรถผ่านไปแล้ว (เทียบกับวันนี้) -> Delay; 'ยังไม่กลับ' มีได้เฉพาะเที่ยวของวันนี้
+      // [ปรับ 08/11/2569] ไม่มีเวลากลับเลย และวันจัดรถผ่านไปแล้ว (เทียบกับวันนี้) -> Delay; 'กำลังเข้าคลัง' มีได้เฉพาะเที่ยวของวันนี้
       if (dispatch.dateKey < __todayKey()) {
         // The report period has already moved past this trip's day with no return scan ever recorded -
         // treat as badly Delay, assumed arrival 20:00 on the dispatch date (no real timestamp available).
@@ -347,7 +347,7 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
     if (planOpt) { dominantProduct = planOpt.product(items); productInferred = false; productTypes.clear(); productTypes.add(dominantProduct); }
 
     // status
-    let status = 'pending'; // ยังไม่กลับเข้าคลัง
+    let status = 'pending'; // กำลังเข้าคลัง
     const cutoffMin = planOpt ? planOpt.cutoff(items, dcCodeV) : resolveCutoffMinutes(dcCodeV, dominantProduct, cutoffOverrides);
     let delayMinutes = null;
     if (dispatch && arriveDC) {
@@ -443,7 +443,7 @@ window.Core = {
 'use strict';
 
 var THAI_MONTHS_ABBR = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-var STATUS_LABEL = { ontime:'Ontime', delay:'Delay', pending:'ยังไม่กลับเข้าคลัง', 'no-cutoff':'ไม่มีเวลาอ้างอิง' };
+var STATUS_LABEL = { ontime:'Ontime', delay:'Delay', pending:'กำลังเข้าคลัง', 'no-cutoff':'ไม่มีเวลาอ้างอิง' };
 var STATUS_COLOR = { ontime:'#2F6F5E', delay:'#D64545', pending:'#64748B', 'no-cutoff':'#1D5FCC' };
 var DC_PALETTE = ['#1D5FCC','#5B8DEF','#0B2A4A','#7FA8E8','#274B6D','#9FC1F2'];
 var PRODUCT_LABEL = { 'แห้ง':'AB', 'เย็น':'CC' };
@@ -454,7 +454,7 @@ var SHARE_ITEMS = [
   { key:'total',    icon:'🚚', label:'เที่ยวรถทั้งหมด' },
   { key:'ontime',   icon:'✅', label:'ตรงเวลา (Ontime)' },
   { key:'delay',    icon:'⏰', label:'ล่าช้า (Delay)' },
-  { key:'pending',  icon:'⌛', label:'ยังไม่กลับเข้าคลัง' },
+  { key:'pending',  icon:'⌛', label:'กำลังเข้าคลัง' },
   { key:'ab',       icon:'📦', label:'สินค้า AB (แห้ง)' },
   { key:'cc',       icon:'❄️', label:'สินค้า CC (เย็น)' },
   { key:'points',   icon:'📍', label:'จุดเข้ารับเฉลี่ย/เที่ยว' },
@@ -1203,7 +1203,7 @@ function buildShareText(){
       case 'total': line = item.icon+' เที่ยวรถทั้งหมด: '+fmtInt(k.total)+' เที่ยว'; break;
       case 'ontime': line = item.icon+' ตรงเวลา (Ontime): '+fmtInt(k.ontime)+' เที่ยว ('+fmtPct(k.ontimePct)+')'; break;
       case 'delay': line = item.icon+' ล่าช้า (Delay): '+fmtInt(k.delay)+' เที่ยว ('+fmtPct(k.delayPct)+')'; break;
-      case 'pending': line = item.icon+' ยังไม่กลับเข้าคลัง: '+fmtInt(k.pending)+' เที่ยว ('+fmtPct(k.pendingPct)+')'; break;
+      case 'pending': line = item.icon+' กำลังเข้าคลัง: '+fmtInt(k.pending)+' เที่ยว ('+fmtPct(k.pendingPct)+')'; break;
       case 'ab': line = item.icon+' AB (แห้ง): '+fmtInt(k.dryBills)+' บิล / '+fmtInt(k.dryItems)+' ชิ้น'; break;
       case 'cc': line = item.icon+' CC (เย็น): '+fmtInt(k.coldBills)+' บิล / '+fmtInt(k.coldItems)+' ชิ้น'; break;
       case 'points': line = item.icon+' จุดเข้ารับเฉลี่ย/เที่ยว: '+k.avgPoints.toFixed(1)+' จุด'; break;
@@ -1273,7 +1273,7 @@ function renderZoneSummary(trips){
       }).join('');
       td.innerHTML =
         '<table class="compare"><thead><tr>' +
-        '<th>DC</th><th>เที่ยว</th><th>Ontime</th><th>Delay</th><th>ยังไม่กลับ</th><th>บิล/ชิ้น (AB · CC)</th><th>รายได้</th><th>จุดเข้ารับเฉลี่ย</th>' +
+        '<th>DC</th><th>เที่ยว</th><th>Ontime</th><th>Delay</th><th>กำลังเข้าคลัง</th><th>บิล/ชิ้น (AB · CC)</th><th>รายได้</th><th>จุดเข้ารับเฉลี่ย</th>' +
         '</tr></thead><tbody>' + dcRows + '</tbody></table>';
       dtr.appendChild(td);
       tbody.appendChild(dtr);
@@ -1392,7 +1392,7 @@ function renderProblemsTab(){
   tbody.innerHTML = '';
   document.getElementById('probEmptyState').style.display = custList.length ? 'none' : 'block';
   custList.forEach(function(c){
-    var statusLabel = c.hasDelay && c.hasPending ? 'Delay + ยังไม่กลับ' : (c.hasDelay ? 'Delay' : 'ยังไม่กลับเข้าคลัง');
+    var statusLabel = c.hasDelay && c.hasPending ? 'Delay + กำลังเข้าคลัง' : (c.hasDelay ? 'Delay' : 'กำลังเข้าคลัง');
     var statusClass = c.hasDelay ? 'delay' : 'pending';
     var tr = document.createElement('tr');
     tr.innerHTML =
@@ -1552,7 +1552,7 @@ var CMP_KPI_ITEMS = [
   { key:'total', label:'เที่ยวรวม', cls:'total', fmt:fmtInt },
   { key:'ontime', label:'Ontime', cls:'ontime', fmt:fmtInt },
   { key:'delay', label:'Delay', cls:'delay', fmt:fmtInt },
-  { key:'pending', label:'ยังไม่กลับ', cls:'pending', fmt:fmtInt },
+  { key:'pending', label:'กำลังเข้าคลัง', cls:'pending', fmt:fmtInt },
 ];
 
 var lastCompareData = null;
@@ -1591,7 +1591,7 @@ function renderCompareTab(){
 
   ensureChart('chartCompareStatus', {
     type:'bar',
-    data:{ labels:['Ontime','Delay','ยังไม่กลับ'], datasets:[
+    data:{ labels:['Ontime','Delay','กำลังเข้าคลัง'], datasets:[
       { label:'Before', data:[bef.ontime,bef.delay,bef.pending], backgroundColor:'#B7C6DC' },
       { label:'After', data:[aft.ontime,aft.delay,aft.pending], backgroundColor:'#1D5FCC' },
     ]},
@@ -1673,7 +1673,7 @@ function buildCompareShareText(){
   lines.push('   AB: '+fmtInt(bef.totalAB)+' → '+fmtInt(aft.totalAB)+'   ·   CC: '+fmtInt(bef.totalCC)+' → '+fmtInt(aft.totalCC));
   lines.push('✅ Ontime: '+fmtInt(bef.ontime)+' → '+fmtInt(aft.ontime)+' ('+diffLabelShort(diffPct(aft.ontimePct,bef.ontimePct))+' pt)');
   lines.push('⏰ Delay: '+fmtInt(bef.delay)+' → '+fmtInt(aft.delay));
-  lines.push('⌛ ยังไม่กลับ: '+fmtInt(bef.pending)+' → '+fmtInt(aft.pending));
+  lines.push('⌛ กำลังเข้าคลัง: '+fmtInt(bef.pending)+' → '+fmtInt(aft.pending));
   lines.push('💰 รายได้: '+fmtBaht(bef.revenue)+' → '+fmtBaht(aft.revenue)+' ('+diffLabelShort(diffPct(aft.revenue,bef.revenue))+')');
   lines.push('📦 AB: '+fmtInt(bef.dryBills)+'/'+fmtInt(bef.dryItems)+' → '+fmtInt(aft.dryBills)+'/'+fmtInt(aft.dryItems)+'  ('+fmtBaht(bef.dryRevenue)+' → '+fmtBaht(aft.dryRevenue)+')');
   lines.push('❄️ CC: '+fmtInt(bef.coldBills)+'/'+fmtInt(bef.coldItems)+' → '+fmtInt(aft.coldBills)+'/'+fmtInt(aft.coldItems)+'  ('+fmtBaht(bef.coldRevenue)+' → '+fmtBaht(aft.coldRevenue)+')');
@@ -2074,7 +2074,7 @@ var DC_COLS = [
   { k:'delayCC',   g:'ล่าช้า',     t:'Delay CC',          v:function(r){ return r.k.delayCC; }, f:fmtInt, cls:'product-cc' },
   { k:'avgDelay',  g:'ล่าช้า',     t:'ล่าช้าเฉลี่ย (นาที)', v:function(r){ return r.avgDelay; }, f:function(x){ return x === null ? '-' : fmtInt(x); }, cmp:false },
   { k:'dAvgDelay', g:'ล่าช้า',     t:'Δ ล่าช้าเฉลี่ย',     d:{ cur:function(r){ return r.avgDelay; }, prev:function(p){ return p.avgDelay; }, mode:'abs', good:false, unit:' นาที' } },
-  { k:'pending',   g:'ยังไม่กลับ', t:'ยังไม่กลับ',         def:1, v:function(r){ return r.k.pending; }, f:fmtInt },
+  { k:'pending',   g:'กำลังเข้าคลัง', t:'กำลังเข้าคลัง',         def:1, v:function(r){ return r.k.pending; }, f:fmtInt },
   { k:'bills',     g:'สินค้า',     t:'บิล',               v:function(r){ return r.k.bills; }, f:fmtInt },
   { k:'pieces',    g:'สินค้า',     t:'ชิ้น',              v:function(r){ return r.k.pieces; }, f:fmtInt },
   { k:'avgPoints', g:'สินค้า',     t:'จุดเข้ารับ/เที่ยว',    v:function(r){ return r.k.avgPoints; }, f:function(x){ return x.toFixed(1); } },
@@ -2311,7 +2311,7 @@ function renderFilterChips(){
   if(state.dcGroupFilter) chips.push({ k:'grp', t:'BKK ไม่รวม 691' });
   if(state.tripGroupFilter) chips.push({ k:'trip', t: state.tripGroupFilter === 'single' ? '1 เที่ยว/วัน' : 'มากกว่า 1 เที่ยว/วัน' });
   if(state.productFilter) chips.push({ k:'prod', t: state.productFilter === 'แห้ง' ? 'สินค้า AB' : 'สินค้า CC' });
-  if(state.statusFilter.size < 3) chips.push({ k:'status', t:'สถานะ: ' + Array.from(state.statusFilter).map(function(s){ return s === 'ontime' ? 'Ontime' : s === 'delay' ? 'Delay' : 'ยังไม่กลับ'; }).join(', ') });
+  if(state.statusFilter.size < 3) chips.push({ k:'status', t:'สถานะ: ' + Array.from(state.statusFilter).map(function(s){ return s === 'ontime' ? 'Ontime' : s === 'delay' ? 'Delay' : 'กำลังเข้าคลัง'; }).join(', ') });
   box.innerHTML = chips.map(function(c){ return '<span class="fchip">' + c.t + '<button type="button" data-clear="' + c.k + '" aria-label="ล้างตัวกรอง ' + c.t + '">✕</button></span>'; }).join('');
   box.hidden = !chips.length;
 }
@@ -2877,7 +2877,7 @@ function planAgg(trips){
 // ===================== [ปรับ 16/11/2569] แผนใหม่: นับตามลูกค้า (แบบ ก) =====================
 // ลูกค้าแต่ละราย (1 ราย ใน 1 เที่ยว) วัดกับเวลาตัดของกลุ่มตัวเอง: ทัน = เวลาตัด DC (หน้าตั้งค่า) · ตก = 20:00
 // เที่ยว: ยึดเวลารถ · เข้ารับอย่างเดียว = กลุ่มทัน (Cut off DC), ในสายกระจาย = กลุ่มตก (20:00) · ลูกค้า/บิล/กล่อง: ตามกลุ่มของลูกค้า
-// บิล/กล่อง นับตามสถานะของลูกค้าเจ้าของบิล · เที่ยวที่ไม่มีเวลากลับ (ประมาณการ) = Delay · ยังไม่กลับ = รถที่ยังไม่มีเวลากลับของวันนี้
+// บิล/กล่อง นับตามสถานะของลูกค้าเจ้าของบิล · เที่ยวที่ไม่มีเวลากลับ (ประมาณการ) = Delay · กำลังเข้าคลัง = รถที่ยังไม่มีเวลากลับของวันนี้
 function planPickStatus(t, cut){
   if(t.customers && state.excludedCustomers && state.excludedCustomers.size && t.customers.some(function(c){ return state.excludedCustomers.has(c); })) return 'on';
   if(!t.arriveDC) return 'pe';
@@ -2887,13 +2887,13 @@ function planPickStatus(t, cut){
 }
 function planStats(trips){
   var Z = function(){ return { t:{ n:0, on:0, de:0, pe:0 }, c:{ n:0, on:0, de:0, pe:0 }, b:{ n:0, on:0, de:0, pe:0 }, i:{ n:0, on:0, de:0, pe:0 }, cuSet:new Set(), cu:0 }; };
-  var R = { all:Z(), t:Z(), l:Z() }, keys = new Set(trips.map(function(t){ return t.key; })), byTrip = new Map(), tripType = new Map();
+  var R = { all:Z(), t:Z(), l:Z(), trips:[] }, keys = new Set(trips.map(function(t){ return t.key; })), byTrip = new Map(), tripType = new Map();
   state.lineItems.forEach(function(li){
     if(!li.plan) return; var t = state.lineItemTripMap.get(li.idx); if(!t || !keys.has(t.key)) return;
     var p = li.plan, ck = p.dcCode + '|' + (p.code && p.code !== '-' ? p.code : 'N:' + planNormName(p.name));
     if(!byTrip.has(t.key)) byTrip.set(t.key, new Map());
-    var m = byTrip.get(t.key); if(!m.has(ck)) m.set(ck, { g: p.group === 'ทัน' ? 't' : 'l', b:0, i:0 });
-    var o = m.get(ck); o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems;
+    var m = byTrip.get(t.key); if(!m.has(ck)) m.set(ck, { g: p.group === 'ทัน' ? 't' : 'l', b:0, i:0, rev:0, name:li.customer || p.name || ck });
+    var o = m.get(ck); o.b += li.dryBills + li.coldBills; o.i += li.dryItems + li.coldItems; o.rev += li.revenue || 0;
     // ประเภทเที่ยวจากเลขที่ใบรายการ (หลักที่ 4): 5 = เข้ารับอย่างเดียว → กลุ่มทัน, 3 = กระจาย+เข้ารับ (ในสาย) → กลุ่มตก
     var ty = String(li.e || '').charAt(3); if(ty === '5' || ty === '3'){ if(!tripType.has(t.key)) tripType.set(t.key, {}); tripType.get(t.key)[ty] = 1; }
   });
@@ -2901,7 +2901,7 @@ function planStats(trips){
     var m = byTrip.get(t.key); if(!m) return;
     var res = {};
     m.forEach(function(o, ck){
-      var st = planPickStatus(t, o.g === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF); res[o.g] = st;
+      var st = planPickStatus(t, o.g === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF); res[o.g] = st; o.st = st;
       ['all', o.g].forEach(function(g){ var X = R[g]; X.c.n++; X.c[st]++; X.b.n += o.b; X.b[st] += o.b; X.i.n += o.i; X.i[st] += o.i; X.cuSet.add(ck); });
     });
     // เที่ยว: ยึดเวลารถ · 1 เที่ยวอยู่กลุ่มเดียวตามประเภทเที่ยว (ไม่มีเลขใบรายการ → มีลูกค้ากลุ่มทัน = ทัน ไม่งั้น ตก)
@@ -2909,6 +2909,7 @@ function planStats(trips){
     var tt = tripType.get(t.key) || {}, tg = tt['3'] ? 'l' : tt['5'] ? (res.t ? 't' : 'l') : (res.t ? 't' : 'l');
     var a = planPickStatus(t, tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF);
     R[tg].t.n++; R[tg].t[a]++; R.all.t.n++; R.all.t[a]++;
+    R.trips.push({ t:t, g:tg, st:a, cut:tg === 't' ? resolveCutoffMinutes(t.dcCode, 'แห้ง', CUTOFF_OVERRIDES) : PLAN_LATE_CUTOFF, cus:Array.from(m.values()) });   // รายเที่ยว (ใช้ในรายการเที่ยวล่าช้า)
   });
   ['all','t','l'].forEach(function(g){ R[g].cu = R[g].cuSet.size; });
   return R;
@@ -2959,7 +2960,7 @@ function planViewHtml(trips){
       return cell(fmtInt(C[g][m][k]), pvF2(v) + '%', pv === null ? '<span class="pv-z">–</span>' : pvDelta(v - pv, ' จุด', goodUp));
     }).join('') + '</tr>';
   };
-  var rates = function(m){ return rRate('Ontime', m, 'on', true, 'pv-hl') + rRate('Delay', m, 'de', false) + rRate('ยังไม่กลับ', m, 'pe', false); };
+  var rates = function(m){ return rRate('Ontime', m, 'on', true, 'pv-hl') + rRate('Delay', m, 'de', false) + rRate('กำลังเข้าคลัง', m, 'pe', false); };
   var cols = '<colgroup><col class="c0">' + '<col class="cn"><col class="cp"><col class="cd">'.repeat(3) + '</colgroup>';
   var sub = '<tr class="pv-sh"><td class="lb">รายการ</td>' + '<td class="n">จำนวน</td><td class="p">%</td><td class="d">เทียบช่วงก่อน</td>'.repeat(3) + '</tr>';
   var box = function(icon, title, desc, body){ return '<section class="pv-box"><div class="pv-bh"><span class="pv-ic">' + icon + '</span><b>' + title + '</b><span class="pv-desc pv-admin">🔒 ' + desc + '</span></div><table class="pv-t">' + cols + sub + body + '</table></section>'; };
@@ -2977,12 +2978,12 @@ function planViewHtml(trips){
     PV_G.map(function(g){ return '<td colspan="3"><div class="pv-ghb" style="background:' + PV_GC[g] + ';color:' + PV_GT[g] + '">' + PV_GN[g] + '<div>' + PV_GS[g] + '</div></div></td>'; }).join('') + '</tr></table>';
   return '<div class="pv-kcs">' + kc('all') + kc('t') + kc('l') + '</div>' + head +
     box('🚚', 'เที่ยว', 'ยึดใบรายการของรถ · เข้ารับอย่างเดียว = กลุ่มทัน (เทียบ Cut off DC) ยกเว้นเที่ยวที่มีแต่ลูกค้ากลุ่มตก · ในสายกระจาย = กลุ่มตก (เทียบ 20:00) · 1 เที่ยวนับกลุ่มเดียว', rTotal('เที่ยวทั้งหมด', 't') + rates('t')) +
-    box('👥', 'ลูกค้า', 'Ontime / Delay / ยังไม่กลับ นับครั้งที่เข้ารับลูกค้า (ลูกค้า 1 ราย ใน 1 เที่ยว = 1 ครั้ง) · วัดกับเวลาตัดของกลุ่มลูกค้า', rTotal('ลูกค้า (ราย)', 'cu') + rates('c')) +
-    box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
-    box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
-    '<p class="pv-foot pv-admin">🔒 เทียบช่วงก่อน: จำนวน = % เปลี่ยนแปลง · อัตรา = จุด · <span class="pv-g">น้ำเงิน = ดีขึ้น</span> · <span class="pv-b">แดง = แย่ลง</span> · "ยังไม่กลับ" เป็นรถของวันนี้ที่ยังไม่ถึงคลัง' + (dcSel ? '' : ' · รายชื่อ DC ในกรอบบนเรียงจาก % ดีที่สุด') + '</p>';
+    box('👥', 'ลูกค้า', 'Ontime / Delay / กำลังเข้าคลัง นับครั้งที่เข้ารับลูกค้า (ลูกค้า 1 ราย ใน 1 เที่ยว = 1 ครั้ง) · วัดกับเวลาตัดของกลุ่มลูกค้า', rTotal('ลูกค้า (ราย)', 'cu') + rates('c')) +
+    box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / กำลังเข้าคลัง', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
+    box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / กำลังเข้าคลัง', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
+    '<p class="pv-foot pv-admin">🔒 เทียบช่วงก่อน: จำนวน = % เปลี่ยนแปลง · อัตรา = จุด · <span class="pv-g">น้ำเงิน = ดีขึ้น</span> · <span class="pv-b">แดง = แย่ลง</span> · "กำลังเข้าคลัง" เป็นรถของวันนี้ที่ยังไม่ถึงคลัง' + (dcSel ? '' : ' · รายชื่อ DC ในกรอบบนเรียงจาก % ดีที่สุด') + '</p>';
 }
-// ===================== [เพิ่ม 26/11/2569] เวลาประมาณการถึงคลัง (ETA) ของรถที่กำลังกลับ =====================
+// ===================== [เพิ่ม 26/11/2569] เวลาประมาณการถึงคลัง (ETA) ของรถที่กำลังเข้าคลัง =====================
 // ฐาน: เวลาออกจากลูกค้ารายล่าสุด (ถ้ายังไม่ออก = เวลาเข้า + เวลาจอดเฉลี่ย) + จุดที่ยังไม่ได้ไป × รอบต่อจุดเฉลี่ย + เวลากลับคลังเฉลี่ย
 // เวลากลับคลังเฉลี่ย (ค่ากลาง) จากประวัติ: ลูกค้ารายนี้เป็นจุดสุดท้าย → ทะเบียนนี้ → เส้นทางนี้ → DC นี้ (ต้องมีอย่างน้อย 3 เที่ยว ยกเว้นระดับ DC)
 // ยังไม่เริ่มรับเลย: ใช้เวลาถึงคลังปกติ (ค่ากลาง) ของทะเบียนนี้ → ของ DC · ไม่กระทบการคำนวณ KPI เดิม

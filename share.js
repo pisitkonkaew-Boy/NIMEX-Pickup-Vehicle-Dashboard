@@ -103,7 +103,7 @@ function kpiData(){
   var main = [
     { id:'ontime', l:'ตรงเวลา (Ontime)', ic:'check', v:fmtInt(cur.ontime), sub:fmtPct(cur.ontimePct) + ' ของเที่ยว', ab:cur.ontimeAB, cc:cur.ontimeCC, bar:'#6e93d6', d: prev && D(cur.ontimePct, prev.ontimePct, 'pp', true) },
     { id:'delay', l:'ล่าช้า (Delay)', ic:'clock', v:fmtInt(cur.delay), sub:fmtPct(cur.delayPct) + ' ของเที่ยว', ab:cur.delayAB, cc:cur.delayCC, bar:'#e0657c', d: prev && D(cur.delayPct, prev.delayPct, 'pp', false) },
-    { id:'pending', l:'ยังไม่กลับเข้าคลัง', ic:'hour', v:fmtInt(cur.pending), sub:fmtPct(cur.pendingPct) + ' ของเที่ยว', ab:cur.pendingAB, cc:cur.pendingCC, bar:'#9aa7bb', d: prev && D(cur.pending, prev.pending, 'abs', false) },
+    { id:'pending', l:'กำลังเข้าคลัง', ic:'hour', v:fmtInt(cur.pending), sub:fmtPct(cur.pendingPct) + ' ของเที่ยว', ab:cur.pendingAB, cc:cur.pendingCC, bar:'#9aa7bb', d: prev && D(cur.pending, prev.pending, 'abs', false) },
   ];
   var stats = [
     { l:'บิลรวม', ic:'bill', v:fmtInt(cur.bills), d: prev && D(cur.bills, prev.bills, 'pct', true) },
@@ -358,7 +358,7 @@ function info169Data(){
     { l:'เที่ยวรวม', ic:'line', v:fmtInt(cur.total), sub:'AB ' + fmtInt(cur.totalAB) + ' · CC ' + fmtInt(cur.totalCC), d:K.totalD },
     { l:'Ontime %', ic:'check', v:fmtPct(cur.ontimePct), sub:fmtInt(cur.ontime) + ' เที่ยวตรงเวลา', d:K.main[0].d, g:'on', rate:cur.ontimePct },
     { l:'Delay %', ic:'clock', v:fmtPct(cur.delayPct), sub:fmtInt(cur.delay) + ' เที่ยวล่าช้า', d:K.main[1].d, g:'de', rate:cur.delayPct },
-    { l:'ยังไม่กลับเข้าคลัง', ic:'hour', v:fmtInt(cur.pending), sub:fmtPct(cur.pendingPct) + ' ของเที่ยว', d:K.main[2].d },
+    { l:'กำลังเข้าคลัง', ic:'hour', v:fmtInt(cur.pending), sub:fmtPct(cur.pendingPct) + ' ของเที่ยว', d:K.main[2].d },
     { l:'ล่าช้าเฉลี่ย', ic:'alert', v: ad === null ? '-' : fmtInt(ad) + ' นาที', sub:'เฉพาะเที่ยวที่ล่าช้า', d: K.prev && ad !== null && adp !== null ? deltaOf(ad, adp, 'abs', false) : null },
     { l:'บิลรวม', ic:'bill', v:fmtInt(cur.bills), sub:'เฉลี่ย ' + fmtInt(cur.avgBills) + ' บิล/คัน', d:K.stats[0].d },
     { l:'ชิ้นรวม', ic:'box', v:fmtInt(cur.pieces), sub:'เฉลี่ย ' + fmtInt(cur.avgPieces) + ' ชิ้น/คัน', d:K.stats[1].d },
@@ -381,7 +381,7 @@ function planModel(){
       tot[g] = { n:n, p: g === 'all' ? 100 : pp(n, an), d: P && pn ? (n - pn) / pn * 100 : null, unit:'%', good:true };
     });
     rows.push([bx[3], tot, 'tt']);
-    [['on','Ontime',true,'hl'], ['de','Delay',false,''], ['pe','ยังไม่กลับ',false,'']].forEach(function(r){
+    [['on','Ontime',true,'hl'], ['de','Delay',false,''], ['pe','กำลังเข้าคลัง',false,'']].forEach(function(r){
       var o = {};
       PG.forEach(function(g){ var v = pp(C[g][m][r[0]], C[g][m].n), pv = P && P[g][m].n ? pp(P[g][m][r[0]], P[g][m].n) : null; o[g] = { n:C[g][m][r[0]], p:v, d: pv === null ? null : v - pv, unit:' จุด', good:r[2] }; });
       rows.push([r[1], o, r[3]]);
@@ -504,7 +504,7 @@ function oldPanelSvg(k, X, x, y, pw, ch){
     var cnt = { A:0, B:0, C:0, D:0, F:0 }; P.rows.forEach(function(r){ cnt[gradeOf('on', r.val)]++; });
     items = ['A','B','C','D','F'].map(function(k){ return { t:'เกรด ' + k, v:cnt[k], c:GRADE_C[k] }; }); ttl = 'สัดส่วนเกรด Ontime % รายทะเบียน (' + fmtInt(P.rows.length) + ' คัน)';
   } else {
-    var k0 = X.K.cur; items = [{ t:'Ontime', v:k0.ontime, c:'#18864b' }, { t:'Delay', v:k0.delay, c:'#c0392b' }, { t:'ยังไม่กลับ', v:k0.pending, c:'#9aa7bb' }]; ttl = 'สัดส่วนสถานะเที่ยว (' + fmtInt(k0.total) + ' เที่ยว)';
+    var k0 = X.K.cur; items = [{ t:'Ontime', v:k0.ontime, c:'#18864b' }, { t:'Delay', v:k0.delay, c:'#c0392b' }, { t:'กำลังเข้าคลัง', v:k0.pending, c:'#9aa7bb' }]; ttl = 'สัดส่วนสถานะเที่ยว (' + fmtInt(k0.total) + ' เที่ยว)';
   }
   var tot = items.reduce(function(a, c){ return a + c.v; }, 0), R = Math.min(PH / 2 - 6, 118), dx = 20 + R + 10, dy = IN + PH / 2 - 4;
   var b4 = donutSvg(dx, dy, R, R * .58, items) + '<text x="' + dx + '" y="' + (dy + 4) + '" text-anchor="middle" font-size="26" font-weight="700" fill="#0b1f3f">' + fmtInt(tot) + '</text><text x="' + dx + '" y="' + (dy + 26) + '" text-anchor="middle" font-size="13" fill="#55657f">' + (X.grade ? 'คัน' : 'เที่ยว') + '</text>';
@@ -646,7 +646,7 @@ function sheetsData(){
     var hd = ['DC'].concat(cols.map(function(c){ return c.t + ((/Pct$/.test(c.k) || (c.d && c.d.mode !== 'abs')) && c.t.indexOf('%') === -1 ? ' (%)' : (c.d && c.d.mode === 'pp' ? ' (จุด)' : '')); }));
     out.push(['ราย DC', [hd].concat(M.rows.map(function(r){ return [r.label].concat(cols.map(function(c){ return raw(r, c); })); })).concat([['รวม'].concat(cols.map(function(c){ return raw(M.sum, c); }))])]);
   }
-  if(picked.has('cust')) out.push(['ลูกค้าที่กระทบ', [['ลูกค้า','ภาค / DC','เที่ยวที่กระทบ','Delay','ยังไม่กลับ','รายได้ของเที่ยว (บาท)']].concat(custRows().map(function(c){ return [c.name, c.loc, c.trips, c.delay, c.pending, Math.round(c.revenue)]; }))]);
+  if(picked.has('cust')) out.push(['ลูกค้าที่กระทบ', [['ลูกค้า','ภาค / DC','เที่ยวที่กระทบ','Delay','กำลังเข้าคลัง','รายได้ของเที่ยว (บาท)']].concat(custRows().map(function(c){ return [c.name, c.loc, c.trips, c.delay, c.pending, Math.round(c.revenue)]; }))]);
   if(picked.has('analysis')){ var A = analysisRows(); out.push(['ผลการวิเคราะห์', [['อันดับ', A.D.t, 'ภาค / DC', 'เที่ยว', 'Ontime %', 'Delay', 'Delay %', 'ล่าช้าเฉลี่ย (นาที)']].concat(A.rows.map(function(o, i){ return [i + 1, o.name, o.loc, o.ts.length, Math.round(o.k.ontimePct * 1000) / 10, o.k.delay, Math.round(o.k.delayPct * 1000) / 10, o.avgDelay === null ? '' : Math.round(o.avgDelay)]; }))]); }
   BW.forEach(function(M){
     if(!picked.has(M.k)) return;
@@ -674,7 +674,7 @@ function saveFile(name, blob){
   setTimeout(function(){ URL.revokeObjectURL(u); }, 4000);
   xsay('ดาวน์โหลดไฟล์แล้ว: ' + name);
 }
-// ===================== [เพิ่ม 26/11/2569] ภาพรถ Delay & กำลังกลับคลัง (เลือกมิติ/คอลัมน์ได้ · 16:9 แบ่งหน้า หรือ ภาพยาว) =====================
+// ===================== [เพิ่ม 26/11/2569] ภาพรถ Delay & กำลังเข้าคลัง (เลือกมิติ/คอลัมน์ได้ · 16:9 แบ่งหน้า หรือ ภาพยาว) =====================
 var FCOL = [
   ['date','วันที่',0.62], ['dc','DC',1.05], ['plate','ทะเบียน',1.1], ['vtype','ประเภทรถ',1.25], ['route','เส้นทาง',2.1], ['prod','สินค้า',0.7],
   ['points','จุดรับ',0.62], ['disp','จัดรถ',0.6], ['cutoff','เวลาตัด',0.62], ['time','ถึงคลัง/ETA',1], ['over','เกิน (นาที)',1.05],
@@ -743,7 +743,7 @@ function fleetSvg(rows, all, pg, pages, long){
   var chip = function(x, w, ttl, val, sub, col){ return '<g transform="translate(' + x + ' ' + y + ')"><rect width="' + w + '" height="86" rx="14" fill="#fff" stroke="#dbe3f0"/><rect width="6" height="86" rx="3" fill="' + col + '"/><text x="22" y="30" font-size="16" font-weight="600" fill="#55657f">' + esc(ttl) + '</text><text x="22" y="70" font-size="34" font-weight="700" fill="' + col + '">' + esc(val) + '</text><text x="' + (w - 18) + '" y="70" text-anchor="end" font-size="15" fill="#55657f">' + esc(sub) + '</text></g>'; };
   var cw = (tw - 3 * 14 - 240) / 3;
   body += chip(m, cw, '⏰ รถ Delay', fmtInt(S.d) + ' คัน', S.avg === null ? '' : 'เฉลี่ยเกิน ' + fmtInt(S.avg) + ' นาที · สูงสุด ' + fmtInt(S.max), '#c0392b');
-  body += chip(m + cw + 14, cw, '🚚 กำลังกลับคลัง', fmtInt(S.p) + ' คัน', 'คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late), '#1d57b8');
+  body += chip(m + cw + 14, cw, '🚚 กำลังเข้าคลัง', fmtInt(S.p) + ' คัน', 'คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late), '#1d57b8');
   body += chip(m + 2 * (cw + 14), cw, '⚠️ เลยเวลาประมาณการแล้ว', fmtInt(S.passed) + ' คัน', 'ยังไม่ถึงคลัง', S.passed ? '#c0392b' : '#55657f');
   body += '<g transform="translate(' + (W - m - 240) + ' ' + y + ')"><rect width="240" height="86" rx="14" fill="#0a2a5e"/><text x="120" y="36" text-anchor="middle" font-size="16" fill="#f0d57a">' + (long ? 'ทั้งหมด' : 'ภาพ') + '</text><text x="120" y="70" text-anchor="middle" font-size="28" font-weight="700" fill="#fff">' + (long ? fmtInt(all.length) + ' คัน' : pg + ' / ' + pages) + '</text></g>';
   y += 86 + 16;
@@ -766,7 +766,7 @@ function fleetFlat(all){
   var L = [], d = all.filter(function(r){ return r.st === 'delay'; }), p = all.filter(function(r){ return r.st === 'pend'; });
   if(d.length) L.push({ sec:'delay', label:'⏰ รถ Delay ' + fmtInt(d.length) + ' คัน' });
   L = L.concat(d);
-  if(p.length) L.push({ sec:'pend', label:'🚚 กำลังกลับคลัง ' + fmtInt(p.length) + ' คัน · เวลาถึงคลังเป็นค่าประมาณการ' });
+  if(p.length) L.push({ sec:'pend', label:'🚚 กำลังเข้าคลัง ' + fmtInt(p.length) + ' คัน · เวลาถึงคลังเป็นค่าประมาณการ' });
   return L.concat(p);
 }
 async function fleetExport(kind){
@@ -782,7 +782,7 @@ async function fleetExport(kind){
   });
   if(cur.length || !pages.length) pages.push(cur);
   for(var k = 0; k < pages.length; k++) saveFile(base + '-16x9' + (pages.length > 1 ? '-p' + (k + 1) : '') + '.png', await toPng(fleetSvg(pages[k], all, k + 1, pages.length, false), 2));
-  xsay('ดาวน์โหลดภาพรถ Delay & กำลังกลับแล้ว ' + pages.length + ' ภาพ');
+  xsay('ดาวน์โหลดภาพรถ Delay & กำลังเข้าคลังแล้ว ' + pages.length + ' ภาพ');
 }
 function renderFleetOpts(){
   var el = document.getElementById('fleetOpts'); if(!el) return;
@@ -790,8 +790,8 @@ function renderFleetOpts(){
   var dcs = uniq(function(t){ return [t.dcCode, dcShort(t.dc) || t.dcCode]; }), vts = uniq(function(t){ var v = flStrip(t.vehicleType); return v ? [v, v] : null; });
   var cb = function(grp, v, t, on){ return '<label><input type="checkbox" data-fl-' + grp + '="' + esc(v) + '"' + (on ? ' checked' : '') + '> ' + esc(t) + '</label>'; };
   var all = fleetRows(), S = flSummary(all);
-  el.innerHTML = '<p class="checks-h">🚚 ภาพรถ Delay & กำลังกลับคลัง</p><div class="info-seg">' +
-    '<label class="' + (FL.st.delay ? 'on' : '') + '"><input type="checkbox" data-fl-st="delay"' + (FL.st.delay ? ' checked' : '') + '> ⏰ Delay</label><label class="' + (FL.st.pend ? 'on' : '') + '"><input type="checkbox" data-fl-st="pend"' + (FL.st.pend ? ' checked' : '') + '> 🚚 กำลังกลับคลัง (มี ETA)</label></div>' +
+  el.innerHTML = '<p class="checks-h">🚚 ภาพรถ Delay & กำลังเข้าคลัง</p><div class="info-seg">' +
+    '<label class="' + (FL.st.delay ? 'on' : '') + '"><input type="checkbox" data-fl-st="delay"' + (FL.st.delay ? ' checked' : '') + '> ⏰ Delay</label><label class="' + (FL.st.pend ? 'on' : '') + '"><input type="checkbox" data-fl-st="pend"' + (FL.st.pend ? ' checked' : '') + '> 🚚 กำลังเข้าคลัง (มี ETA)</label></div>' +
     '<details class="fl-det"><summary>ตัวกรองทุกมิติ' + (FL.dcs.length || FL.prod.length || FL.vt.length || FL.q || FL.min ? ' · มีตัวกรอง' : '') + '</summary>' +
       '<p class="checks-h">DC</p><div class="checks">' + dcs.map(function(d){ return cb('dc', d[0], d[1], FL.dcs.indexOf(d[0]) !== -1); }).join('') + '</div>' +
       '<p class="checks-h">สินค้า</p><div class="checks">' + cb('prod', 'แห้ง', 'AB (แห้ง)', FL.prod.indexOf('แห้ง') !== -1) + cb('prod', 'เย็น', 'CC (เย็น)', FL.prod.indexOf('เย็น') !== -1) + '</div>' +
@@ -800,7 +800,7 @@ function renderFleetOpts(){
       '<label>เรียงตาม<select data-fl-sort="1">' + [['over','เกินเวลามากสุดก่อน'],['time','เวลาถึงคลัง / ETA'],['dc','DC'],['plate','ทะเบียน'],['date','วันที่จัดรถ']].map(function(o){ return '<option value="' + o[0] + '"' + (FL.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' +
       '<p class="info-note">ไม่ติ๊ก = เอาทั้งหมด · ใช้ช่วงเวลาและตัวกรองบนหน้าเป็นฐาน</p></details>' +
     '<details class="fl-det"><summary>คอลัมน์ในภาพ (' + FL.cols.length + ')</summary><div class="checks">' + FCOL.map(function(c){ return cb('col', c[0], c[1], FL.cols.indexOf(c[0]) !== -1); }).join('') + '</div></details>' +
-    '<p class="info-note" id="flCount">ตรงเงื่อนไข: Delay ' + fmtInt(S.d) + ' คัน · กำลังกลับ ' + fmtInt(S.p) + ' คัน (คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late) + ')</p>' +
+    '<p class="info-note" id="flCount">ตรงเงื่อนไข: Delay ' + fmtInt(S.d) + ' คัน · กำลังเข้าคลัง ' + fmtInt(S.p) + ' คัน (คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late) + ')</p>' +
     '<div class="xbtns fl-btns"><button class="btn-primary xbtn" type="button" data-fl-x="169">ภาพ 16:9 (แบ่งหน้าอัตโนมัติ)</button><button class="btn-primary xbtn" type="button" data-fl-x="long">ภาพยาวภาพเดียว</button></div>';
 }
 function wireFleet(){
@@ -837,13 +837,16 @@ function p3Model(){
   return withPlan('new', function(){
     var cur = p3Trips(state.dateFrom, state.dateTo), pp = previousPeriod(state.dateFrom, state.dateTo, state.granularity), minK = dataMinKey();
     var prev = (pp && minK && pp.from >= minK) ? p3Trips(pp.from, pp.to) : [];
-    var pack = function(f, pv, name, code){ return { name:name, code:code, s:planStats(f), p:planStats(pv), rev:f.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), prevRev:pv.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), hasPrev:pv.length > 0, delay:f.filter(function(t){ return t.status === 'delay'; }).length, pend:f.filter(function(t){ return t.status === 'pending' || t.status === 'no-cutoff'; }).length }; };
+    var pack = function(f, pv, name, code){ return { name:name, code:code, s:planStats(f), p:planStats(pv), rev:f.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), prevRev:pv.reduce(function(a, t){ return a + (t.revenue || 0); }, 0), hasPrev:pv.length > 0, delay:0, pend:0 }; };
     var codes = []; cur.forEach(function(t){ if(codes.indexOf(t.dcCode) === -1) codes.push(t.dcCode); });
     var dcs = codes.map(function(c, i){ var f = cur.filter(function(t){ return t.dcCode === c; }); return pack(f, prev.filter(function(t){ return t.dcCode === c; }), dcShort(f[0].dc) || c, c); });
     var r = function(o){ var x = o.s.all.t; return x.n ? x.on / x.n : -1; };
     dcs.sort(function(a, b){ return r(b) - r(a); });
     dcs.forEach(function(d, i){ d.col = P3COL[d.code] || P3ALT[i % P3ALT.length]; d.rank = i + 1; });
-    return { bkk:pack(cur, prev, 'ภาพรวม BKK', dcs.length + ' DC'), dcs:dcs, S:scopeText(), pp:pp };
+    var bkk = pack(cur, prev, 'ภาพรวม BKK', dcs.length + ' DC');
+    // Delay / กำลังเข้าคลัง ตามสถานะเที่ยวของแผนใหม่ (ตรงกับตัวเลขในการ์ด)
+    [bkk].concat(dcs).forEach(function(o){ o.delay = o.s.trips.filter(function(x){ return x.st === 'de'; }).length; o.pend = o.s.trips.filter(function(x){ return x.st === 'pe'; }).length; });
+    return { bkk:bkk, dcs:dcs, S:scopeText(), pp:pp };
   });
 }
 function p3p(x){ return x && x.n ? x.on / x.n * 100 : null; }
@@ -887,7 +890,7 @@ function p3Card(o, x, y, w, h, lay, dark){
   // แถบล่าง
   b += '<rect x="' + (x + 1) + '" y="' + (y + h - 36) + '" width="' + (w - 2) + '" height="35" fill="' + (dark ? 'rgba(255,255,255,.08)' : '#f6f8fc') + '"/>' +
     '<text x="' + (x + 20) + '" y="' + (y + h - 13) + '" font-size="15" fill="' + ink + '">⏰ Delay <tspan font-weight="700" fill="' + (dark ? '#ff9b8f' : P3B) + '">' + fmtInt(o.delay) + '</tspan> คัน</text>' +
-    '<text x="' + (x + w - 20) + '" y="' + (y + h - 13) + '" font-size="15" fill="' + ink + '" text-anchor="end">🚚 กำลังกลับ <tspan font-weight="700">' + fmtInt(o.pend) + '</tspan> คัน</text>';
+    '<text x="' + (x + w - 20) + '" y="' + (y + h - 13) + '" font-size="15" fill="' + ink + '" text-anchor="end">🚚 กำลังเข้าคลัง <tspan font-weight="700">' + fmtInt(o.pend) + '</tspan> คัน</text>';
   return b;
 }
 function p3Table(M, x, y, w, h){
@@ -917,7 +920,7 @@ function p3Head(W, M){
     '<rect x="' + (W - 30 - 360) + '" y="12" width="360" height="72" rx="14" fill="rgba(255,255,255,.08)" stroke="#d4af37"/>' + p3T(W - 30 - 180, 42, esc(S.gran + ' · ' + S.range), 17, '#fff', 700, 'middle') + p3T(W - 30 - 180, 66, esc(sub), 13, '#fff', 400, 'middle');
 }
 function p3Foot(W, H){ return '<rect y="' + (H - 42) + '" width="' + W + '" height="42" fill="#0a2a5e"/><rect y="' + (H - 42) + '" width="' + W + '" height="3" fill="#d4af37"/>' + p3T(W / 2, H - 15, 'NIM Express · SEAL Gold Chain    ข้อมูลจากรายงาน NIMEX016267', 14, '#dfe8f7', 400, 'middle'); }
-function p3Svg(kind, M){
+function p3Svg(kind, M, list){
   M = M || p3Model();
   var b = '', m = 30, g = 16, n = Math.max(1, M.dcs.length);
   if(kind === 'long'){
@@ -925,6 +928,7 @@ function p3Svg(kind, M){
     b += p3Card(M.bkk, m, y, cw, ch, 'h', true); y += ch + g;
     var th = 52 + 44 + 6 * 46 + 16; b += p3Table(M, m, y, cw, th); y += th + g;
     M.dcs.forEach(function(d){ b += p3Card(d, m, y, cw, ch, 'h', false); y += ch + g; });
+    if(list && list.length){ b += p3ListHeadRow(m, y, cw); var rl = p3ListBody(list, m, y + 48, cw); b += rl.b; y = rl.y + 12; }
     var H = y + 8 + 42;
     return wrapSvg(W, H, p3Head(W, M) + b + p3Foot(W, H));
   }
@@ -942,8 +946,77 @@ function p3Render(){
   el.innerHTML = c.svg.replace('<svg ', '<svg class="p3-svg" preserveAspectRatio="xMidYMin meet" ');
 }
 window.__pickupP3Render = p3Render;
+// ---------- รายการเที่ยวล่าช้า (ต่อท้ายอินโฟแบบยาว): เที่ยว + รายชื่อลูกค้าในแผน · บิล · กล่อง · บาท ----------
+function p3Over(x){
+  var t = x.t; if(t.arriveSynthetic || !t.arriveDC) return 'ไม่มีเวลากลับ';
+  var hm = String(t.arriveDC.hh).padStart(2, '0') + ':' + String(t.arriveDC.mi).padStart(2, '0');
+  if(t.arriveDC.dateKey !== t.dateKey) return 'ถึง ' + t.arriveDC.d + '/' + t.arriveDC.mo + ' ' + hm;
+  return 'ถึง ' + hm + ' (+' + fmtInt(t.arriveDC.timeOfDayMin - x.cut) + ' นาที)';
+}
+function p3DelayItems(M){
+  var out = [];
+  M.dcs.forEach(function(d){
+    var L = d.s.trips.filter(function(x){ return x.st === 'de'; }).sort(function(a, b){ return a.t.dateKey < b.t.dateKey ? -1 : a.t.dateKey > b.t.dateKey ? 1 : (b.t.arriveDC ? b.t.arriveDC.ms : 0) - (a.t.arriveDC ? a.t.arriveDC.ms : 0); });
+    if(!L.length) return;
+    var sum = function(k){ return L.reduce(function(a, x){ return a + x.cus.reduce(function(q, c){ return q + c[k]; }, 0); }, 0); };
+    out.push({ k:'dc', d:d, n:L.length, b:sum('b'), i:sum('i'), rev:sum('rev'), h:62 });
+    L.forEach(function(x){
+      out.push({ k:'trip', d:d, x:x, b:x.cus.reduce(function(q, c){ return q + c.b; }, 0), i:x.cus.reduce(function(q, c){ return q + c.i; }, 0), rev:x.cus.reduce(function(q, c){ return q + c.rev; }, 0), h:40 });
+      x.cus.slice().sort(function(a, b){ return (a.st === 'de' ? 0 : 1) - (b.st === 'de' ? 0 : 1) || b.b - a.b; }).forEach(function(c){ out.push({ k:'cus', d:d, c:c, h:28 }); });
+      out[out.length - 1].last = true;
+    });
+  });
+  return out;
+}
+function p3ListBody(items, x0, y0, w){
+  var b = '', y = y0, nx = [x0 + w - 330, x0 + w - 215, x0 + w - 16];
+  items.forEach(function(it){
+    if(it.k === 'dc'){
+      b += '<rect x="' + x0 + '" y="' + (y + 8) + '" width="' + w + '" height="48" rx="12" fill="' + it.d.col + '"/>' + p3T(x0 + 18, y + 40, '⏰ ' + esc(it.d.name) + ' · เที่ยวล่าช้า ' + fmtInt(it.n) + ' เที่ยว', 20, '#fff', 700) +
+        p3T(nx[0], y + 39, 'บิล ' + fmtInt(it.b), 15, '#fff', 600, 'end') + p3T(nx[1], y + 39, 'กล่อง ' + fmtInt(it.i), 15, '#fff', 600, 'end') + p3T(nx[2], y + 39, '฿' + fmtInt(Math.round(it.rev)), 15, '#fff', 700, 'end');
+    } else if(it.k === 'trip'){
+      var t = it.x.t, gl = it.x.g === 't' ? 'กลุ่มทัน' : 'กลุ่มตก', gc = it.x.g === 't' ? P3G : '#1a1a1a';
+      b += '<rect x="' + x0 + '" y="' + (y + 6) + '" width="' + w + '" height="34" rx="8" fill="#f1f4fa"/>' +
+        '<text x="' + (x0 + 14) + '" y="' + (y + 29) + '" font-size="15" fill="#0b1f3f"><tspan font-weight="700">' + (t.dispatch ? t.dispatch.d + '/' + t.dispatch.mo : '') + ' · ' + esc(t.plate) + '</tspan><tspan dx="10" fill="#55657f">' + esc(flFit(flStrip(t.routes[0]) || '', 330, 15)) + '</tspan>' +
+        '<tspan dx="10" fill="' + gc + '" font-weight="700">' + gl + '</tspan><tspan dx="10" fill="#55657f">ตัด ' + flMin(it.x.cut) + ' →</tspan><tspan dx="6" fill="' + P3B + '" font-weight="700">' + esc(p3Over(it.x)) + '</tspan></text>' +
+        p3T(nx[0], y + 29, fmtInt(it.b), 15, '#0b1f3f', 700, 'end') + p3T(nx[1], y + 29, fmtInt(it.i), 15, '#0b1f3f', 700, 'end') + p3T(nx[2], y + 29, '฿' + fmtInt(Math.round(it.rev)), 15, '#0b1f3f', 700, 'end');
+    } else {
+      var c = it.c, cg = c.g === 't' ? 'ทัน' : 'ตก';
+      b += '<circle cx="' + (x0 + 34) + '" cy="' + (y + 15) + '" r="4" fill="' + (c.st === 'de' ? P3B : c.st === 'on' ? P3G : '#9aa7bb') + '"/>' +
+        '<text x="' + (x0 + 48) + '" y="' + (y + 20) + '" font-size="14" fill="#0b1f3f">' + esc(flFit(c.name, w - 520, 14)) + '<tspan dx="10" font-size="12" font-weight="700" fill="' + (c.g === 't' ? P3G : '#1a1a1a') + '">' + cg + '</tspan><tspan dx="8" font-size="12" fill="' + (c.st === 'de' ? P3B : '#55657f') + '">' + (c.st === 'de' ? 'Delay' : c.st === 'on' ? 'Ontime' : 'กำลังเข้าคลัง') + '</tspan></text>' +
+        p3T(nx[0], y + 20, fmtInt(c.b), 14, '#55657f', 400, 'end') + p3T(nx[1], y + 20, fmtInt(c.i), 14, '#55657f', 400, 'end') + p3T(nx[2], y + 20, '฿' + fmtInt(Math.round(c.rev)), 14, '#55657f', 400, 'end');
+      if(it.last) b += '<line x1="' + x0 + '" x2="' + (x0 + w) + '" y1="' + (y + it.h + 2) + '" y2="' + (y + it.h + 2) + '" stroke="#e3e9f3"/>';
+    }
+    y += it.h + (it.last ? 6 : 0);
+  });
+  return { b:b, y:y };
+}
+function p3ListHeadRow(x0, y, w){
+  var nx = [x0 + w - 330, x0 + w - 215, x0 + w - 16];
+  return '<rect x="' + x0 + '" y="' + y + '" width="' + w + '" height="40" rx="10" fill="#0a2a5e"/>' + p3T(x0 + 16, y + 26, '📋 เที่ยวล่าช้า · ลูกค้าในแผน (● แดง = ลูกค้าที่ Delay)', 16, '#fff', 700) +
+    p3T(nx[0], y + 26, 'บิล', 15, '#f0d57a', 700, 'end') + p3T(nx[1], y + 26, 'กล่อง', 15, '#f0d57a', 700, 'end') + p3T(nx[2], y + 26, 'บาท', 15, '#f0d57a', 700, 'end');
+}
+function p3ItemsH(L){ return L.reduce(function(a, it){ return a + it.h + (it.last ? 6 : 0); }, 0); }
+function p3LongSet(){
+  var M = p3Model(), items = p3DelayItems(M), base = p3Svg('long', M), W = 1240, m = 30, MAXH = 6400, out = [];
+  if(!items.length) return [base];
+  var hBase = base.H, need = p3ItemsH(items) + 60;
+  if(hBase + need <= MAXH) return [p3Svg('long', M, items)];
+  out.push(base);
+  var chunks = [], cur = [], h = 0, cap = MAXH - 112 - 70 - 60;
+  items.forEach(function(it){ var ih = it.h + (it.last ? 6 : 0); if(h + ih > cap && cur.length){ chunks.push(cur); cur = []; h = 0; } cur.push(it); h += ih; });
+  if(cur.length) chunks.push(cur);
+  chunks.forEach(function(L, k){
+    if(L[0].k !== 'dc'){ var dd = L[0].d; L = [{ k:'dc', d:dd, n:items.filter(function(x){ return x.k === 'trip' && x.d === dd; }).length, b:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].b, i:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].i, rev:items.filter(function(x){ return x.k === 'dc' && x.d === dd; })[0].rev, h:62 }].concat(L); }
+    var r2 = p3ListBody(L, m, 112 + 56, W - 2 * m), H2 = r2.y + 20 + 42;
+    out.push(wrapSvg(W, H2, p3Head(W, M) + p3ListHeadRow(m, 116, W - 2 * m).replace('📋 เที่ยวล่าช้า', '📋 เที่ยวล่าช้า (' + (k + 1) + '/' + chunks.length + ')') + r2.b + p3Foot(W, H2)));
+  });
+  return out;
+}
 window.__pickupP3Export = async function(kind){
-  try{ var c = p3Svg(kind); saveFile(p3Stamp() + (kind === 'long' ? '-Long' : '-16x9') + '.png', await toPng(c, 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแล้ว'); }
+  try{
+    if(kind === 'long'){ var set = p3LongSet(); for(var i = 0; i < set.length; i++) saveFile(p3Stamp() + '-Long' + (set.length > 1 ? '-p' + (i + 1) : '') + '.png', await toPng(set[i], 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแบบยาวแล้ว ' + set.length + ' ภาพ'); return; }
+    var c = p3Svg(kind); saveFile(p3Stamp() + '-16x9.png', await toPng(c, 2)); if(!window.__testSave) showToast('ดาวน์โหลดอินโฟแล้ว'); }
   catch(err){ showToast('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); }
 };
 function renderInfoOpts(){
