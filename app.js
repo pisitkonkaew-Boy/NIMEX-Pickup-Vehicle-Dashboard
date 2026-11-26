@@ -785,7 +785,7 @@ function planRelabelDom(root){
   root = root || document.getElementById('appRoot') || document.body;
   var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), n, on = isNewPlan();
   while((n = w.nextNode())){
-    var pe = n.parentNode; if(pe && (pe.nodeName === 'SCRIPT' || pe.nodeName === 'STYLE' || pe.nodeName === 'TEXTAREA' || (pe.closest && pe.closest('#tabSettings')))) continue;   // หน้าตั้งค่ายังเป็น AB/CC (เวลาตัดตามสินค้า)
+    var pe = n.parentNode; if(pe && (pe.nodeName === 'SCRIPT' || pe.nodeName === 'STYLE' || pe.nodeName === 'TEXTAREA' || (pe.closest && pe.closest('#tabSettings, #tabPlanCC')))) continue;   // หน้าตั้งค่ายังเป็น AB/CC (เวลาตัดตามสินค้า)
     var orig = __planTextOrig.get(n);
     if(on){ var src = orig !== undefined ? orig : n.nodeValue, nv = planLabel(src); if(nv !== src){ if(orig === undefined) __planTextOrig.set(n, src); if(n.nodeValue !== nv) n.nodeValue = nv; } }
     else if(orig !== undefined){ n.nodeValue = orig; __planTextOrig.delete(n); }
