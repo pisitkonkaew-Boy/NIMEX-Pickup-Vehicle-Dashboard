@@ -674,6 +674,160 @@ function saveFile(name, blob){
   setTimeout(function(){ URL.revokeObjectURL(u); }, 4000);
   xsay('ดาวน์โหลดไฟล์แล้ว: ' + name);
 }
+// ===================== [เพิ่ม 26/11/2569] ภาพรถ Delay & กำลังกลับคลัง (เลือกมิติ/คอลัมน์ได้ · 16:9 แบ่งหน้า หรือ ภาพยาว) =====================
+var FCOL = [
+  ['date','วันที่',0.62], ['dc','DC',1.05], ['plate','ทะเบียน',1.1], ['vtype','ประเภทรถ',1.25], ['route','เส้นทาง',2.1], ['prod','สินค้า',0.7],
+  ['points','จุดรับ',0.62], ['disp','จัดรถ',0.6], ['cutoff','เวลาตัด',0.62], ['time','ถึงคลัง/ETA',1], ['over','เกิน (นาที)',1.05],
+  ['last','ลูกค้าล่าสุด',2], ['basis','ฐานประมาณการ',3.4], ['bills','บิล',0.55], ['pieces','ชิ้น',0.6]
+];
+var FL = { st:{ delay:1, pend:1 }, dcs:[], prod:[], vt:[], q:'', min:0, sort:'over', cols:['date','dc','plate','route','prod','points','cutoff','time','over','last'] };
+try{ var _fl = JSON.parse(localStorage.getItem('pickup-fleet') || 'null'); if(_fl && _fl.cols) FL = Object.assign(FL, _fl); }catch(e){}
+function flSave(){ try{ localStorage.setItem('pickup-fleet', JSON.stringify(FL)); }catch(e){} }
+var tripEta = A.tripEta || function(){ return null; }, tripLast = A.tripLast || function(){ return ''; }, dcShort = A.dcShort || function(x){ return x; };
+function flHM(p){ return p ? String(p.hh).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0') : '–'; }
+function flMin(m){ return m === null || m === undefined ? '–' : String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function flStrip(s){ return String(s || '').replace(/^\s*[A-Z0-9\-]+\s{2,}/, '').replace(/^\d+\s+/, '').trim(); }
+function flBase(){ return applyFilters().filter(function(t){ return t.status === 'delay' || t.status === 'pending' || t.status === 'no-cutoff'; }); }
+function fleetRows(){
+  var out = [];
+  flBase().forEach(function(t){
+    var st = t.status === 'delay' ? 'delay' : 'pend'; if(!FL.st[st]) return;
+    if(FL.dcs.length && FL.dcs.indexOf(t.dcCode) === -1) return;
+    if(FL.prod.length && FL.prod.indexOf(t.dominantProduct) === -1) return;
+    if(FL.vt.length && FL.vt.indexOf(flStrip(t.vehicleType)) === -1) return;
+    if(FL.q){ var hay = (t.plate + ' ' + t.routes.join(' ') + ' ' + t.customers.join(' ')).toLowerCase(); if(hay.indexOf(String(FL.q).toLowerCase()) === -1) return; }
+    var e = st === 'pend' ? tripEta(t) : null, over = st === 'delay' ? t.delayMinutes : (e ? e.over : null);
+    if(st === 'delay' && FL.min && (over || 0) < FL.min) return;
+    out.push({ t:t, st:st, e:e, over:over });
+  });
+  var key = { over:function(r){ return -(r.over === null ? -1e9 : r.over); }, dc:function(r){ return r.t.dcCode + ' ' + r.t.plate; }, plate:function(r){ return r.t.plate; }, time:function(r){ return r.st === 'pend' ? (r.e && r.e.eta) || 9e15 : (r.t.arriveDC ? r.t.arriveDC.ms : 9e15); }, date:function(r){ return (r.t.dispatch ? r.t.dispatch.ms : 0); } }[FL.sort] || function(){ return 0; };
+  out.sort(function(a, b){ if(a.st !== b.st) return a.st === 'delay' ? -1 : 1; var x = key(a), y = key(b); return typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'th', { numeric:true }); });
+  return out;
+}
+function flCell(k, r){   // → [ข้อความ, สี, ตัวหนา]
+  var t = r.t, e = r.e, p = r.st === 'pend';
+  switch(k){
+    case 'date': return [t.dispatch ? t.dispatch.d + '/' + t.dispatch.mo : '–'];
+    case 'dc': return [dcShort(t.dc) || t.dcCode];
+    case 'plate': return [t.plate + (t.tripGroupSize > 1 ? ' (' + t.tripNo + ')' : ''), '#0b1f3f', 1];
+    case 'vtype': return [flStrip(t.vehicleType)];
+    case 'route': return [flStrip(t.routes[0]) || '–'];
+    case 'prod': return [t.dominantProduct === 'แห้ง' ? 'AB' : 'CC', t.dominantProduct === 'แห้ง' ? '#b8860b' : '#1d57b8', 1];
+    case 'points': return [p && e ? e.done + '/' + e.total : fmtInt(t.pickupPoints)];
+    case 'disp': return [flHM(t.dispatch)];
+    case 'cutoff': return [flMin(t.cutoffMin)];
+    case 'time': return p ? [e && e.etaHM ? '≈ ' + e.etaHM : '–', '#1d57b8', 1] : [t.arriveSynthetic ? 'ไม่มีเวลา' : flHM(t.arriveDC), '#0b1f3f', 1];
+    case 'over':
+      if(!p) return [r.over === null ? 'Delay' : '+' + fmtInt(r.over), '#c0392b', 1];
+      if(!e || e.over === null) return ['–'];
+      if(e.passed && e.over > 0) return ['เลย ETA · +' + fmtInt(e.over), '#c0392b', 1];
+      return e.over > 0 ? ['คาดเลย +' + fmtInt(e.over), '#c0392b', 1] : ['คาดทัน (' + fmtInt(-e.over) + ')', '#1d57b8', 1];
+    case 'last': return [p ? (e && e.last) || 'ยังไม่เริ่มรับ' : (tripLast(t) || '–')];
+    case 'basis': return [p ? (e && e.basis) || 'ไม่มีประวัติพอประมาณการ' : '–', '#55657f'];
+    case 'bills': return [fmtInt(t.bills)];
+    case 'pieces': return [fmtInt(t.pieces)];
+  }
+  return [''];
+}
+function flFit(s, w, fs){ s = String(s); var max = Math.max(3, Math.floor(w / (fs * 0.56))); return s.length > max ? s.slice(0, max - 1) + '…' : s; }
+function flSummary(rows){
+  var d = rows.filter(function(r){ return r.st === 'delay'; }), p = rows.filter(function(r){ return r.st === 'pend'; });
+  var dm = d.filter(function(r){ return r.over !== null; }).map(function(r){ return r.over; });
+  return { d:d.length, avg:dm.length ? Math.round(dm.reduce(function(a, b){ return a + b; }, 0) / dm.length) : null, max:dm.length ? Math.max.apply(null, dm) : null,
+    p:p.length, ok:p.filter(function(r){ return r.e && r.e.over !== null && r.e.over <= 0; }).length, late:p.filter(function(r){ return r.e && r.e.over > 0; }).length, passed:p.filter(function(r){ return r.e && r.e.passed && r.e.over > 0; }).length };
+}
+function fleetSvg(rows, all, pg, pages, long){
+  var W = 1920, m = 30, head = 116, top = head + 16, RH = 42, HH = 40, cols = FCOL.filter(function(c){ return FL.cols.indexOf(c[0]) !== -1; });
+  var sw = cols.reduce(function(a, c){ return a + c[2]; }, 0), tw = W - 2 * m, xs = [m]; cols.forEach(function(c){ xs.push(xs[xs.length - 1] + c[2] / sw * tw); });
+  var S = flSummary(all), body = '', y = top;
+  var chip = function(x, w, ttl, val, sub, col){ return '<g transform="translate(' + x + ' ' + y + ')"><rect width="' + w + '" height="86" rx="14" fill="#fff" stroke="#dbe3f0"/><rect width="6" height="86" rx="3" fill="' + col + '"/><text x="22" y="30" font-size="16" font-weight="600" fill="#55657f">' + esc(ttl) + '</text><text x="22" y="70" font-size="34" font-weight="700" fill="' + col + '">' + esc(val) + '</text><text x="' + (w - 18) + '" y="70" text-anchor="end" font-size="15" fill="#55657f">' + esc(sub) + '</text></g>'; };
+  var cw = (tw - 3 * 14 - 240) / 3;
+  body += chip(m, cw, '⏰ รถ Delay', fmtInt(S.d) + ' คัน', S.avg === null ? '' : 'เฉลี่ยเกิน ' + fmtInt(S.avg) + ' นาที · สูงสุด ' + fmtInt(S.max), '#c0392b');
+  body += chip(m + cw + 14, cw, '🚚 กำลังกลับคลัง', fmtInt(S.p) + ' คัน', 'คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late), '#1d57b8');
+  body += chip(m + 2 * (cw + 14), cw, '⚠️ เลยเวลาประมาณการแล้ว', fmtInt(S.passed) + ' คัน', 'ยังไม่ถึงคลัง', S.passed ? '#c0392b' : '#55657f');
+  body += '<g transform="translate(' + (W - m - 240) + ' ' + y + ')"><rect width="240" height="86" rx="14" fill="#0a2a5e"/><text x="120" y="36" text-anchor="middle" font-size="16" fill="#f0d57a">' + (long ? 'ทั้งหมด' : 'ภาพ') + '</text><text x="120" y="70" text-anchor="middle" font-size="28" font-weight="700" fill="#fff">' + (long ? fmtInt(all.length) + ' คัน' : pg + ' / ' + pages) + '</text></g>';
+  y += 86 + 16;
+  body += '<rect x="' + m + '" y="' + y + '" width="' + tw + '" height="' + HH + '" rx="10" fill="#0a2a5e"/>';
+  cols.forEach(function(c, i){ body += '<text x="' + (xs[i] + 10) + '" y="' + (y + 26) + '" font-size="15" font-weight="700" fill="#fff">' + esc(flFit(c[1], xs[i + 1] - xs[i] - 14, 15)) + '</text>'; });
+  y += HH + 4;
+  rows.forEach(function(r, ri){
+    if(r.sec){ body += '<rect x="' + m + '" y="' + y + '" width="' + tw + '" height="' + (RH - 4) + '" rx="8" fill="' + (r.sec === 'delay' ? '#fdecea' : '#e8f0fc') + '"/><text x="' + (m + 14) + '" y="' + (y + 26) + '" font-size="17" font-weight="700" fill="' + (r.sec === 'delay' ? '#c0392b' : '#1d57b8') + '">' + esc(r.label) + '</text>'; y += RH; return; }
+    if(ri % 2) body += '<rect x="' + m + '" y="' + y + '" width="' + tw + '" height="' + RH + '" fill="#f6f8fc"/>';
+    cols.forEach(function(c, i){ var v = flCell(c[0], r), fs = c[0] === 'basis' ? 13 : 15.5; body += '<text x="' + (xs[i] + 10) + '" y="' + (y + 27) + '" font-size="' + fs + '" font-weight="' + (v[2] ? 700 : 400) + '" fill="' + (v[1] || '#0b1f3f') + '">' + esc(flFit(v[0], xs[i + 1] - xs[i] - 14, fs)) + '</text>'; });
+    body += '<line x1="' + m + '" x2="' + (W - m) + '" y1="' + (y + RH) + '" y2="' + (y + RH) + '" stroke="#e3e9f3"/>';
+    y += RH;
+  });
+  if(!rows.length) body += '<text x="' + W / 2 + '" y="' + (y + 60) + '" text-anchor="middle" font-size="22" fill="#55657f">ไม่มีรถที่ตรงเงื่อนไข</text>';
+  var H = long ? Math.max(1080, y + 30 + 42) : 1080;
+  body += '<rect y="' + (H - 42) + '" width="' + W + '" height="42" fill="#0a2a5e"/><rect y="' + (H - 42) + '" width="' + W + '" height="3" fill="#d4af37"/><text x="' + W / 2 + '" y="' + (H - 15) + '" text-anchor="middle" font-size="14" fill="#dfe8f7">NIM Express · SEAL Gold Chain    ≈ = เวลาประมาณการจากประวัติ    ข้อมูลจากรายงาน NIMEX016267</text>';
+  return wrapSvg(W, H, sheetHead(W, head, 'hfl') + body);
+}
+function fleetFlat(all){
+  var L = [], d = all.filter(function(r){ return r.st === 'delay'; }), p = all.filter(function(r){ return r.st === 'pend'; });
+  if(d.length) L.push({ sec:'delay', label:'⏰ รถ Delay ' + fmtInt(d.length) + ' คัน' });
+  L = L.concat(d);
+  if(p.length) L.push({ sec:'pend', label:'🚚 กำลังกลับคลัง ' + fmtInt(p.length) + ' คัน · เวลาถึงคลังเป็นค่าประมาณการ' });
+  return L.concat(p);
+}
+async function fleetExport(kind){
+  var all = fleetRows(), flat = fleetFlat(all), base = stamp() + '-Fleet';
+  if(!FL.cols.length){ xsay('เลือกคอลัมน์อย่างน้อย 1 คอลัมน์'); return; }
+  if(kind === 'long'){ saveFile(base + '-Long.png', await toPng(fleetSvg(flat, all, 1, 1, true), 2)); return; }
+  var per = Math.floor((1080 - 42 - 12 - (116 + 16 + 86 + 16 + 44)) / 42), pages = [], cur = [], sec = null;
+  flat.forEach(function(r){
+    if(r.sec) sec = r;
+    if(cur.length >= per || (r.sec && cur.length >= per - 1)){ pages.push(cur); cur = []; }
+    if(!cur.length && !r.sec && sec) cur.push({ sec:sec.sec, label:sec.label + ' (ต่อ)' });
+    cur.push(r);
+  });
+  if(cur.length || !pages.length) pages.push(cur);
+  for(var k = 0; k < pages.length; k++) saveFile(base + '-16x9' + (pages.length > 1 ? '-p' + (k + 1) : '') + '.png', await toPng(fleetSvg(pages[k], all, k + 1, pages.length, false), 2));
+  xsay('ดาวน์โหลดภาพรถ Delay & กำลังกลับแล้ว ' + pages.length + ' ภาพ');
+}
+function renderFleetOpts(){
+  var el = document.getElementById('fleetOpts'); if(!el) return;
+  var B = flBase(), uniq = function(f){ var m = {}; B.forEach(function(t){ var k = f(t); if(k) m[k[0]] = k[1]; }); return Object.keys(m).sort().map(function(k){ return [k, m[k]]; }); };
+  var dcs = uniq(function(t){ return [t.dcCode, dcShort(t.dc) || t.dcCode]; }), vts = uniq(function(t){ var v = flStrip(t.vehicleType); return v ? [v, v] : null; });
+  var cb = function(grp, v, t, on){ return '<label><input type="checkbox" data-fl-' + grp + '="' + esc(v) + '"' + (on ? ' checked' : '') + '> ' + esc(t) + '</label>'; };
+  var all = fleetRows(), S = flSummary(all);
+  el.innerHTML = '<p class="checks-h">🚚 ภาพรถ Delay & กำลังกลับคลัง</p><div class="info-seg">' +
+    '<label class="' + (FL.st.delay ? 'on' : '') + '"><input type="checkbox" data-fl-st="delay"' + (FL.st.delay ? ' checked' : '') + '> ⏰ Delay</label><label class="' + (FL.st.pend ? 'on' : '') + '"><input type="checkbox" data-fl-st="pend"' + (FL.st.pend ? ' checked' : '') + '> 🚚 กำลังกลับคลัง (มี ETA)</label></div>' +
+    '<details class="fl-det"><summary>ตัวกรองทุกมิติ' + (FL.dcs.length || FL.prod.length || FL.vt.length || FL.q || FL.min ? ' · มีตัวกรอง' : '') + '</summary>' +
+      '<p class="checks-h">DC</p><div class="checks">' + dcs.map(function(d){ return cb('dc', d[0], d[1], FL.dcs.indexOf(d[0]) !== -1); }).join('') + '</div>' +
+      '<p class="checks-h">สินค้า</p><div class="checks">' + cb('prod', 'แห้ง', 'AB (แห้ง)', FL.prod.indexOf('แห้ง') !== -1) + cb('prod', 'เย็น', 'CC (เย็น)', FL.prod.indexOf('เย็น') !== -1) + '</div>' +
+      (vts.length ? '<p class="checks-h">ประเภทรถ</p><div class="checks">' + vts.map(function(v){ return cb('vt', v[0], v[1], FL.vt.indexOf(v[0]) !== -1); }).join('') + '</div>' : '') +
+      '<div class="fl-row"><label>ค้นหา ทะเบียน / เส้นทาง / ลูกค้า<input type="search" data-fl-q="1" value="' + esc(FL.q) + '"></label><label>Delay ตั้งแต่ (นาที)<input type="number" min="0" step="5" data-fl-min="1" value="' + (FL.min || '') + '"></label>' +
+      '<label>เรียงตาม<select data-fl-sort="1">' + [['over','เกินเวลามากสุดก่อน'],['time','เวลาถึงคลัง / ETA'],['dc','DC'],['plate','ทะเบียน'],['date','วันที่จัดรถ']].map(function(o){ return '<option value="' + o[0] + '"' + (FL.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' +
+      '<p class="info-note">ไม่ติ๊ก = เอาทั้งหมด · ใช้ช่วงเวลาและตัวกรองบนหน้าเป็นฐาน</p></details>' +
+    '<details class="fl-det"><summary>คอลัมน์ในภาพ (' + FL.cols.length + ')</summary><div class="checks">' + FCOL.map(function(c){ return cb('col', c[0], c[1], FL.cols.indexOf(c[0]) !== -1); }).join('') + '</div></details>' +
+    '<p class="info-note" id="flCount">ตรงเงื่อนไข: Delay ' + fmtInt(S.d) + ' คัน · กำลังกลับ ' + fmtInt(S.p) + ' คัน (คาดทัน ' + fmtInt(S.ok) + ' · คาดเลย ' + fmtInt(S.late) + ')</p>' +
+    '<div class="xbtns fl-btns"><button class="btn-primary xbtn" type="button" data-fl-x="169">ภาพ 16:9 (แบ่งหน้าอัตโนมัติ)</button><button class="btn-primary xbtn" type="button" data-fl-x="long">ภาพยาวภาพเดียว</button></div>';
+}
+function wireFleet(){
+  var el = document.getElementById('fleetOpts'); if(!el) return;
+  var keepOpen = function(){ return Array.from(el.querySelectorAll('details')).map(function(d){ return d.open; }); }, reopen = function(o){ el.querySelectorAll('details').forEach(function(d, i){ d.open = !!o[i]; }); };
+  var upd = function(){ var o = keepOpen(); flSave(); renderFleetOpts(); reopen(o); };
+  var tog = function(arr, v, on){ var a = arr.filter(function(x){ return x !== v; }); if(on) a.push(v); return a; };
+  el.addEventListener('change', function(e){
+    var t = e.target, d = t.dataset;
+    if(d.flSt){ FL.st[d.flSt] = t.checked ? 1 : 0; }
+    else if(d.flDc !== undefined){ FL.dcs = tog(FL.dcs, d.flDc, t.checked); }
+    else if(d.flProd !== undefined){ FL.prod = tog(FL.prod, d.flProd, t.checked); }
+    else if(d.flVt !== undefined){ FL.vt = tog(FL.vt, d.flVt, t.checked); }
+    else if(d.flCol !== undefined){ FL.cols = FCOL.map(function(c){ return c[0]; }).filter(function(k){ return k === d.flCol ? t.checked : FL.cols.indexOf(k) !== -1; }); }
+    else if(d.flMin){ FL.min = Math.max(0, +t.value || 0); }
+    else if(d.flSort){ FL.sort = t.value; }
+    else if(d.flQ){ FL.q = t.value.trim(); }
+    else return;
+    upd();
+  });
+  el.addEventListener('click', async function(e){
+    var b = e.target.closest('[data-fl-x]'); if(!b) return;
+    var q = el.querySelector('[data-fl-q]'); if(q) FL.q = q.value.trim();
+    b.disabled = true; xsay('กำลังสร้างภาพ…');
+    try{ await fleetExport(b.dataset.flX); }catch(err){ xsay('สร้างภาพไม่สำเร็จ: ' + (err && err.message || err)); } finally { b.disabled = false; }
+  });
+}
 function renderInfoOpts(){
   var el = document.getElementById('infoOpts'); if(!el) return;
   var md = infoMode(), hp = hasPlan(), rad = function(v, t, dis){ return '<label class="' + (md === v ? 'on' : '') + (dis ? ' dis' : '') + '"><input type="radio" name="infoMode" value="' + v + '"' + (md === v ? ' checked' : '') + (dis ? ' disabled' : '') + '> ' + t + '</label>'; };
@@ -694,7 +848,7 @@ function openShare(){
     '<p class="checks-h">ตั้งค่า</p><label class="wide"><input type="checkbox" id="gradeToggle"' + (showGrade() ? ' checked' : '') + '> แสดงเกรด A–F (Ontime %, Delay %) — บันทึกลงระบบ</label>';
   document.getElementById('shareText').value = summaryText();
   xsay('');
-  renderInfoOpts();
+  renderInfoOpts(); renderFleetOpts();
   document.getElementById('shareModalOverlay').classList.add('open');
 }
 async function doExport(a){
@@ -734,6 +888,7 @@ async function doExport(a){
 }
 window.__nimexExport = doExport;
 function wireShare(){
+  wireFleet();
   var io = document.getElementById('infoOpts');
   if(io) io.addEventListener('change', function(e){
     var t = e.target;

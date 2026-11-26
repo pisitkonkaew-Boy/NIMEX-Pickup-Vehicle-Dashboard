@@ -397,7 +397,7 @@ function buildTrips(lineItems, reportEndDateKey, cutoffOverrides, excludedCustom
       productTypes: Array.from(productTypes),
       dominantProduct, productInferred,
       revenue, dryBills, dryItems, coldBills, coldItems, bills, pieces,
-      status, delayMinutes,
+      status, delayMinutes, cutoffMin,
       lineItemIdx: items.map(i => i.idx),
       lineCount: items.length,
     });
@@ -1058,7 +1058,7 @@ function renderRevenuePieces(trips){
 
 // ---------- table ----------
 function tripArriveTimeLabel(t){
-  if(!t.arriveDC) return '-';
+  if(!t.arriveDC){ var e = (t.status === 'pending' || t.status === 'no-cutoff') ? tripEta(t) : null; return e && e.etaHM ? '≈ ' + e.etaHM + ' (ประมาณการ)' : '-'; }
   var s = pad2(t.arriveDC.hh) + ':' + pad2(t.arriveDC.mi);
   if(t.dateKey && t.arriveDC.dateKey !== t.dateKey) s += ' (+1d)';
   return s;
@@ -2409,7 +2409,7 @@ function wireAnalysis(){
 // [ปรับ 14/11/2569] โค้ดแชร์/ส่งออกย้ายไปไฟล์ share.js (โหลดก่อน app.js) — ส่งฟังก์ชันคำนวณเดิมให้ใช้ตรงๆ ไม่คำนวณซ้ำ
 function wireShare(){
   if(!window.PickupShare){ console.error("[share] share.js not loaded"); return; }
-  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows });
+  window.__pickupShare = window.PickupShare({ state:state, anState:anState, analysisRows:analysisRows, applyFilters:applyFilters, buildDcTableModel:buildDcTableModel, chartWindowTrips:chartWindowTrips, computeKPISet:computeKPISet, dataMinKey:dataMinKey, diffPct:diffPct, effectiveGranularity:effectiveGranularity, fmtBaht:fmtBaht, fmtDelta:fmtDelta, fmtInt:fmtInt, fmtPct:fmtPct, getProblemTrips:getProblemTrips, groupByBucket:groupByBucket, locationOf:locationOf, prevTripsForPeriod:prevTripsForPeriod, previousPeriod:previousPeriod, shortRangeLabel:shortRangeLabel, showToast:showToast, avgDelayMin:avgDelayMin, tripsInRange:tripsInRange, tripMatchesNonDateFilters:tripMatchesNonDateFilters, dcShortLabel:dcShortLabel, dcRowsFor:dcRowsFor, planStats:planStats, planDcRank:planDcRank, isNewPlan:isNewPlan, withPlanMode:withPlanMode, hasPlan:hasPlanRows, tripEta:tripEta, tripLast:tripLast, dcShort:dcShortLabel });
 }
 
 function wireEvents(){
@@ -2976,6 +2976,83 @@ function planViewHtml(trips){
     box('🧾', 'บิล', 'บิลของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('บิลทั้งหมด', 'b') + rates('b')) +
     box('📦', 'กล่อง', 'กล่องของลูกค้าที่เข้ารับทันเวลา / ล่าช้า / ยังไม่กลับ', rTotal('กล่องทั้งหมด', 'i') + rates('i')) +
     '<p class="pv-foot pv-admin">🔒 เทียบช่วงก่อน: จำนวน = % เปลี่ยนแปลง · อัตรา = จุด · <span class="pv-g">น้ำเงิน = ดีขึ้น</span> · <span class="pv-b">แดง = แย่ลง</span> · "ยังไม่กลับ" เป็นรถของวันนี้ที่ยังไม่ถึงคลัง' + (dcSel ? '' : ' · รายชื่อ DC ในกรอบบนเรียงจาก % ดีที่สุด') + '</p>';
+}
+// ===================== [เพิ่ม 26/11/2569] เวลาประมาณการถึงคลัง (ETA) ของรถที่กำลังกลับ =====================
+// ฐาน: เวลาออกจากลูกค้ารายล่าสุด (ถ้ายังไม่ออก = เวลาเข้า + เวลาจอดเฉลี่ย) + จุดที่ยังไม่ได้ไป × รอบต่อจุดเฉลี่ย + เวลากลับคลังเฉลี่ย
+// เวลากลับคลังเฉลี่ย (ค่ากลาง) จากประวัติ: ลูกค้ารายนี้เป็นจุดสุดท้าย → ทะเบียนนี้ → เส้นทางนี้ → DC นี้ (ต้องมีอย่างน้อย 3 เที่ยว ยกเว้นระดับ DC)
+// ยังไม่เริ่มรับเลย: ใช้เวลาถึงคลังปกติ (ค่ากลาง) ของทะเบียนนี้ → ของ DC · ไม่กระทบการคำนวณ KPI เดิม
+var ETA_CACHE = { trips:null, m:null };
+function etaMedian(a){ if(!a || !a.length) return null; var s = a.slice().sort(function(x, y){ return x - y; }), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; }
+function liByIdx(){
+  if(state.__liIdx && state.__liIdx.src === state.lineItems) return state.__liIdx.map;
+  var m = new Map(); (state.lineItems || []).forEach(function(li){ m.set(li.idx, li); });
+  state.__liIdx = { src:state.lineItems, map:m }; return m;
+}
+function etaCustKey(li){ return li.customerCode || li.customer || ''; }
+function etaModel(){
+  if(ETA_CACHE.trips === state.trips && ETA_CACHE.m) return ETA_CACHE.m;
+  var L = liByIdx(), H = { cust:new Map(), plate:new Map(), route:new Map(), dc:new Map(), cyc:new Map(), dwell:new Map(), todP:new Map(), todD:new Map() };
+  var push = function(m, k, v){ if(!k) return; if(!m.has(k)) m.set(k, []); m.get(k).push(v); };
+  state.trips.forEach(function(t){
+    if(!t.arriveDC || t.arriveSynthetic || !t.dispatch || t.arriveDC.dateKey !== t.dispatch.dateKey) return;
+    push(H.todP, t.dcCode + '|' + t.plate, t.arriveDC.timeOfDayMin); push(H.todD, t.dcCode, t.arriveDC.timeOfDayMin);
+    var its = t.lineItemIdx.map(function(i){ return L.get(i); }).filter(Boolean);
+    its.forEach(function(i){ if(i.arrivePoint && i.leavePoint){ var d = (i.leavePoint.ms - i.arrivePoint.ms) / 60000; if(d >= 0 && d <= 180) push(H.dwell, t.dcCode, d); } });
+    var lv = its.filter(function(i){ return i.leavePoint && i.leavePoint.dateKey === t.dispatch.dateKey; }).sort(function(a, b){ return a.leavePoint.ms - b.leavePoint.ms; });
+    if(!lv.length) return;
+    var last = lv[lv.length - 1], g = (t.arriveDC.ms - last.leavePoint.ms) / 60000;
+    if(g >= 0 && g <= 480){ push(H.cust, t.dcCode + '|' + etaCustKey(last), g); push(H.plate, t.dcCode + '|' + t.plate, g); push(H.route, t.dcCode + '|' + (t.routes[0] || ''), g); push(H.dc, t.dcCode, g); }
+    var prev = null; lv.forEach(function(i){ var c = etaCustKey(i); if(prev && c !== prev.c){ var d = (i.leavePoint.ms - prev.ms) / 60000; if(d > 0 && d <= 240) push(H.cyc, t.dcCode, d); } prev = { c:c, ms:i.leavePoint.ms }; });
+  });
+  var M = {};
+  Object.keys(H).forEach(function(k){ var o = new Map(); H[k].forEach(function(v, kk){ o.set(kk, { v:etaMedian(v), n:v.length }); }); M[k] = o; });
+  ETA_CACHE = { trips:state.trips, m:M }; return M;
+}
+function etaPick(M, list){   // [ชื่อชุด, คีย์, ป้าย, ขั้นต่ำ]
+  for(var i = 0; i < list.length; i++){ var r = M[list[i][0]].get(list[i][1]); if(r && r.v !== null && r.n >= list[i][3]) return { v:r.v, n:r.n, src:list[i][2] }; }
+  return null;
+}
+function hmOf(ms){ var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function tripEta(t){
+  if(!t || !(t.status === 'pending' || t.status === 'no-cutoff') || !t.dispatch) return null;
+  var M = etaModel(), L = liByIdx(), cs = new Map();
+  t.lineItemIdx.forEach(function(ix){
+    var i = L.get(ix); if(!i) return; var c = etaCustKey(i), o = cs.get(c) || { c:c, name:i.customer || c, arr:null, lv:null };
+    if(i.arrivePoint && (!o.arr || i.arrivePoint.ms > o.arr.ms)) o.arr = i.arrivePoint;
+    if(i.leavePoint && (!o.lv || i.leavePoint.ms > o.lv.ms)) o.lv = i.leavePoint;
+    cs.set(c, o);
+  });
+  var all = Array.from(cs.values()), done = all.filter(function(o){ return o.lv || o.arr; }), left = all.length - done.length, dc = t.dcCode;
+  var day0 = new Date(t.dispatch.dateObj.getFullYear(), t.dispatch.dateObj.getMonth(), t.dispatch.dateObj.getDate()).getTime();
+  var R = { total:all.length, done:done.length, left:left, last:null, eta:null, basis:'', n:0 };
+  if(done.length){
+    done.sort(function(a, b){ return (a.lv || a.arr).ms - (b.lv || b.arr).ms; });
+    var last = done[done.length - 1], base = (last.lv || last.arr).ms, parts = [];
+    R.last = last.name;
+    parts.push((last.lv ? 'ออก ' : 'เข้า ') + last.name + ' ' + hmOf(base));
+    if(!last.lv){ var dw = etaPick(M, [['dwell', dc, 'DC', 1]]), dwv = dw ? dw.v : 15; base += dwv * 6e4; parts.push('จอด ~' + Math.round(dwv) + ' นาที'); }
+    if(left){ var cy = etaPick(M, [['cyc', dc, 'DC', 1]]), cyv = cy ? cy.v : 25; base += left * cyv * 6e4; parts.push('อีก ' + left + ' จุด × ' + Math.round(cyv) + ' นาที'); }
+    var lg = left ? etaPick(M, [['plate', dc + '|' + t.plate, 'ทะเบียนนี้', 3], ['route', dc + '|' + (t.routes[0] || ''), 'เส้นทางนี้', 3], ['dc', dc, 'ค่าเฉลี่ย DC', 1]])
+                  : etaPick(M, [['cust', dc + '|' + last.c, 'จากลูกค้ารายนี้', 3], ['plate', dc + '|' + t.plate, 'ทะเบียนนี้', 3], ['route', dc + '|' + (t.routes[0] || ''), 'เส้นทางนี้', 3], ['dc', dc, 'ค่าเฉลี่ย DC', 1]]);
+    var lgv = lg ? lg.v : 45; base += lgv * 6e4;
+    parts.push('กลับคลัง ~' + Math.round(lgv) + ' นาที (' + (lg ? lg.src + ' ' + lg.n + ' เที่ยว' : 'ค่าตั้งต้น') + ')');
+    R.eta = base; R.basis = parts.join(' + '); R.n = lg ? lg.n : 0; R.src = lg ? lg.src : 'ค่าตั้งต้น';
+  } else {
+    var td = etaPick(M, [['todP', dc + '|' + t.plate, 'ทะเบียนนี้', 3], ['todD', dc, 'ค่าเฉลี่ย DC', 1]]);
+    if(td){ R.eta = day0 + td.v * 6e4; R.basis = 'ยังไม่เริ่มรับ · เวลาถึงคลังปกติของ' + td.src + ' (' + td.n + ' เที่ยว)'; R.n = td.n; R.src = td.src; }
+  }
+  if(R.eta !== null){
+    R.etaHM = hmOf(R.eta); R.etaMin = Math.round((R.eta - day0) / 6e4);
+    R.over = t.cutoffMin === null || t.cutoffMin === undefined ? null : R.etaMin - t.cutoffMin;
+    R.passed = Date.now() > R.eta;
+  }
+  return R;
+}
+window.__pickupTripEta = tripEta;
+function tripLast(t){   // ลูกค้ารายสุดท้ายที่ออกจากจุดรับ (ใช้แสดงในภาพรถ Delay)
+  var L = liByIdx(), best = null;
+  (t.lineItemIdx || []).forEach(function(ix){ var i = L.get(ix); if(i && i.leavePoint && (!best || i.leavePoint.ms > best.leavePoint.ms)) best = i; });
+  return best ? best.customer || best.customerCode : '';
 }
 // คำนวณชั่วคราวในอีกแผน (ใช้ตอนส่งออกอินโฟกราฟิก) แล้วคืนสภาพเดิม · หน้าเว็บไม่ถูกวาดใหม่
 function withPlanMode(mode, fn){
